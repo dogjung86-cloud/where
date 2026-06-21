@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "description": "Somewhere is a world photo exchange powered by $WHERE.",
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "overrides": {
     "postcss": "8.5.10"
   },
