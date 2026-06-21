@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Somewhere",
+  title: "SomeWhere",
   description: "A world photo exchange powered by $WHERE.",
 };
 

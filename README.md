@@ -1,8 +1,8 @@
-# Somewhere
+# SomeWhere
 
-Somewhere is a random world photo exchange powered by `$WHERE`.
+SomeWhere is a random world photo exchange powered by `$WHERE`.
 
-Users send one current photo, receive moments from other cities, and can use `$WHERE` to unlock extra arrivals, rerolls, and collection utilities.
+Users send one current photo, receive moments from other cities, and can use `$WHERE` to unlock extra arrivals, rerolls, and permanent vault storage.
 
 ## Stack
 
