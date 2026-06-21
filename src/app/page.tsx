@@ -50,7 +50,7 @@ export default function Home() {
     <main className="min-h-screen bg-[#f7f3ec] text-[#171717]">
       <section className="mx-auto grid min-h-screen w-full max-w-7xl grid-cols-1 gap-6 px-4 py-4 md:px-6 lg:grid-cols-[1.05fr_0.95fr]">
         <div className="flex min-h-[calc(100vh-2rem)] flex-col gap-6">
-          <header className="flex items-center justify-between border-b border-[#d8d0c2] pb-4">
+          <header className="flex items-start justify-between gap-4 border-b border-[#d8d0c2] pb-4">
             <div className="flex items-center gap-3">
               <div className="grid size-10 place-items-center rounded-lg bg-[#171717] text-white">
                 <MapPin size={20} strokeWidth={2} />
@@ -58,6 +58,11 @@ export default function Home() {
               <div>
                 <p className="text-sm font-medium text-[#776e62]">Somewhere</p>
                 <h1 className="text-2xl font-semibold">World photo exchange</h1>
+                <p className="mt-2 max-w-xl text-sm leading-6 text-[#5f574f]">
+                  Send one photo from your day and receive a random moment from
+                  another city. Collect places, discover ordinary lives, and use
+                  $WHERE to open more arrivals.
+                </p>
               </div>
             </div>
             <button className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#171717] bg-[#171717] px-3 text-sm font-semibold text-white">
