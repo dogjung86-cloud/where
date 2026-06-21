@@ -45,7 +45,7 @@ export const WHERE_UTILITY_PRICES: WhereUtility[] = [
   {
     key: "city_reroll",
     label: "City reroll",
-    detail: "Try another random city",
+    detail: "After your photo lands",
     cost: 50,
   },
   {

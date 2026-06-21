@@ -17,22 +17,103 @@ const receivedMoments = [
     city: "Seoul",
     country: "South Korea",
     time: "2 min ago",
-    image:
-      "https://images.unsplash.com/photo-1548115184-bc6544d06a58?auto=format&fit=crop&w=720&q=75",
+    image: "/samples/sample-01.webp",
   },
   {
     city: "Reykjavik",
     country: "Iceland",
     time: "18 min ago",
-    image:
-      "https://images.unsplash.com/photo-1504829857797-ddff29c27927?auto=format&fit=crop&w=720&q=75",
+    image: "/samples/sample-02.webp",
   },
   {
     city: "Buenos Aires",
     country: "Argentina",
     time: "42 min ago",
-    image:
-      "https://images.unsplash.com/photo-1589909202802-8f4aadce1849?auto=format&fit=crop&w=720&q=75",
+    image: "/samples/sample-03.webp",
+  },
+  {
+    city: "Osaka",
+    country: "Japan",
+    time: "1 hr ago",
+    image: "/samples/sample-04.webp",
+  },
+  {
+    city: "Berlin",
+    country: "Germany",
+    time: "1 hr ago",
+    image: "/samples/sample-05.webp",
+  },
+  {
+    city: "Taipei",
+    country: "Taiwan",
+    time: "2 hr ago",
+    image: "/samples/sample-06.webp",
+  },
+  {
+    city: "Chicago",
+    country: "United States",
+    time: "2 hr ago",
+    image: "/samples/sample-07.webp",
+  },
+  {
+    city: "Amsterdam",
+    country: "Netherlands",
+    time: "2 hr ago",
+    image: "/samples/sample-08.webp",
+  },
+  {
+    city: "Melbourne",
+    country: "Australia",
+    time: "3 hr ago",
+    image: "/samples/sample-09.webp",
+  },
+  {
+    city: "Toronto",
+    country: "Canada",
+    time: "3 hr ago",
+    image: "/samples/sample-10.webp",
+  },
+  {
+    city: "Madrid",
+    country: "Spain",
+    time: "3 hr ago",
+    image: "/samples/sample-11.webp",
+  },
+  {
+    city: "London",
+    country: "United Kingdom",
+    time: "3 hr ago",
+    image: "/samples/sample-12.webp",
+  },
+  {
+    city: "Singapore",
+    country: "Singapore",
+    time: "4 hr ago",
+    image: "/samples/sample-13.webp",
+  },
+  {
+    city: "Busan",
+    country: "South Korea",
+    time: "4 hr ago",
+    image: "/samples/sample-14.webp",
+  },
+  {
+    city: "Queenstown",
+    country: "New Zealand",
+    time: "5 hr ago",
+    image: "/samples/sample-15.webp",
+  },
+  {
+    city: "Paris",
+    country: "France",
+    time: "6 hr ago",
+    image: "/samples/sample-16.webp",
+  },
+  {
+    city: "Lucerne",
+    country: "Switzerland",
+    time: "7 hr ago",
+    image: "/samples/sample-17.webp",
   },
 ];
 
@@ -91,6 +172,9 @@ export default function Home() {
                   </span>
                   <input className="sr-only" type="file" accept="image/*" />
                 </label>
+                <p className="mt-3 rounded-lg bg-[#171717] px-3 py-2 text-sm font-medium text-white">
+                  Send to receive. Rerolls unlock after your photo lands.
+                </p>
               </div>
 
               <div className="mt-5 grid grid-cols-3 gap-2 text-center">
@@ -115,6 +199,9 @@ export default function Home() {
                   <div>
                     <p className="text-sm font-medium text-[#776e62]">Inbox</p>
                     <h2 className="text-xl font-semibold">Arrived moments</h2>
+                    <p className="mt-1 text-sm text-[#776e62]">
+                      Shy selfies, travel snaps, and quiet ordinary days.
+                    </p>
                   </div>
                   <button className="grid size-10 place-items-center rounded-lg border border-[#d8d0c2] text-[#171717]">
                     <RefreshCcw size={17} strokeWidth={2} />
@@ -135,7 +222,7 @@ export default function Home() {
                       <div className="p-3">
                         <p className="text-sm font-semibold">{moment.city}</p>
                         <p className="text-xs text-[#776e62]">
-                          {moment.country} · {moment.time}
+                          {moment.country} - {moment.time}
                         </p>
                       </div>
                     </article>
