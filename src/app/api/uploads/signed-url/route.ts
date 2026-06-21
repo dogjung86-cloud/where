@@ -1,0 +1,97 @@
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+
+import { getAuthenticatedUser } from "@/lib/auth";
+import { getSupabaseConfig } from "@/lib/env";
+import { jsonError, validationError } from "@/lib/http";
+import { createServiceSupabaseClient } from "@/lib/supabase/server";
+
+const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
+
+const signedUploadSchema = z.object({
+  contentType: z.enum(["image/jpeg", "image/png", "image/webp", "image/heic"]),
+  byteSize: z.number().int().positive().max(MAX_UPLOAD_BYTES),
+  cityName: z.string().trim().min(1).max(120).optional(),
+  regionName: z.string().trim().min(1).max(120).optional(),
+  countryCode: z.string().trim().length(2).toUpperCase().optional(),
+  countryName: z.string().trim().min(1).max(120).optional(),
+  locationSource: z
+    .enum(["ip", "browser_gps", "photo_exif", "manual"])
+    .default("ip"),
+  displayLat: z.number().min(-90).max(90).optional(),
+  displayLng: z.number().min(-180).max(180).optional(),
+  accuracyM: z.number().int().positive().max(100_000).optional(),
+});
+
+function extensionForContentType(contentType: string) {
+  if (contentType === "image/png") {
+    return "png";
+  }
+
+  if (contentType === "image/webp") {
+    return "webp";
+  }
+
+  if (contentType === "image/heic") {
+    return "heic";
+  }
+
+  return "jpg";
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const user = await getAuthenticatedUser(request);
+
+    if (!user) {
+      return jsonError("Authentication required", 401);
+    }
+
+    const body = signedUploadSchema.parse(await request.json());
+    const supabase = createServiceSupabaseClient();
+    const { photoBucket } = getSupabaseConfig();
+    const photoId = crypto.randomUUID();
+    const extension = extensionForContentType(body.contentType);
+    const storagePath = `incoming/${user.id}/${photoId}.${extension}`;
+
+    const { error: insertError } = await supabase.from("photos").insert({
+      id: photoId,
+      owner_id: user.id,
+      storage_bucket: photoBucket,
+      original_path: storagePath,
+      status: "awaiting_upload",
+      content_type: body.contentType,
+      byte_size: body.byteSize,
+      city_name: body.cityName ?? null,
+      region_name: body.regionName ?? null,
+      country_code: body.countryCode ?? null,
+      country_name: body.countryName ?? null,
+      location_source: body.locationSource,
+      display_lat: body.displayLat ?? null,
+      display_lng: body.displayLng ?? null,
+      accuracy_m: body.accuracyM ?? null,
+    });
+
+    if (insertError) {
+      return jsonError(insertError.message, 500);
+    }
+
+    const { data, error: signedUrlError } = await supabase.storage
+      .from(photoBucket)
+      .createSignedUploadUrl(storagePath);
+
+    if (signedUrlError) {
+      return jsonError(signedUrlError.message, 500);
+    }
+
+    return NextResponse.json({
+      photoId,
+      bucket: photoBucket,
+      path: storagePath,
+      signedUrl: data.signedUrl,
+      token: data.token,
+    });
+  } catch (error) {
+    return validationError(error);
+  }
+}
