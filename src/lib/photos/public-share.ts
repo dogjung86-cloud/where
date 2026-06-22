@@ -1,0 +1,86 @@
+import { cache } from "react";
+
+import { getOptionalEnv, getSupabaseConfig } from "@/lib/env";
+import { createServiceSupabaseClient } from "@/lib/supabase/server";
+
+type ShareMatchRow = {
+  id: string;
+  delivered_at: string;
+  receiver_deleted_at: string | null;
+  photos: {
+    city_name: string | null;
+    country_name: string | null;
+    processed_path: string | null;
+    thumbnail_path: string | null;
+  } | null;
+};
+
+export type PublicShareArrival = {
+  city: string;
+  country: string;
+  deliveredAt: string;
+  imageUrl: string;
+  matchId: string;
+  shareUrl: string;
+};
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function getPublicAppUrl() {
+  return getOptionalEnv("NEXT_PUBLIC_APP_URL", "https://playwhere.xyz").replace(
+    /\/$/,
+    "",
+  );
+}
+
+export const getPublicShareArrival = cache(
+  async (matchId: string): Promise<PublicShareArrival | null> => {
+    if (!UUID_PATTERN.test(matchId)) {
+      return null;
+    }
+
+    const supabase = createServiceSupabaseClient();
+    const { photoBucket } = getSupabaseConfig();
+    const { data, error } = await supabase
+      .from("photo_matches")
+      .select(
+        [
+          "id",
+          "delivered_at",
+          "receiver_deleted_at",
+          "photos(city_name, country_name, processed_path, thumbnail_path)",
+        ].join(", "),
+      )
+      .eq("id", matchId)
+      .is("receiver_deleted_at", null)
+      .maybeSingle<ShareMatchRow>();
+
+    if (error || !data?.photos) {
+      return null;
+    }
+
+    const imagePath = data.photos.processed_path ?? data.photos.thumbnail_path;
+
+    if (!imagePath) {
+      return null;
+    }
+
+    const { data: signedImage } = await supabase.storage
+      .from(photoBucket)
+      .createSignedUrl(imagePath, 60 * 60 * 24 * 7);
+
+    if (!signedImage?.signedUrl) {
+      return null;
+    }
+
+    return {
+      city: data.photos.city_name ?? "Somewhere",
+      country: data.photos.country_name ?? "Unknown country",
+      deliveredAt: data.delivered_at,
+      imageUrl: signedImage.signedUrl,
+      matchId: data.id,
+      shareUrl: `${getPublicAppUrl()}/share/${data.id}`,
+    };
+  },
+);

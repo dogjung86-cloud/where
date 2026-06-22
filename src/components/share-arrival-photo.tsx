@@ -7,6 +7,7 @@ type ShareArrivalPhotoProps = {
   city: string;
   country: string;
   image: string;
+  matchId?: string;
   variant?: "image" | "icon";
 };
 
@@ -46,10 +47,25 @@ function downloadFile(file: File) {
   URL.revokeObjectURL(url);
 }
 
+function getOrigin() {
+  return typeof window === "undefined"
+    ? "https://playwhere.xyz"
+    : window.location.origin;
+}
+
+function absoluteUrl(value: string) {
+  if (/^https?:\/\//i.test(value)) {
+    return value;
+  }
+
+  return `${getOrigin()}${value.startsWith("/") ? "" : "/"}${value}`;
+}
+
 export function ShareArrivalPhoto({
   city,
   country,
   image,
+  matchId,
   variant = "image",
 }: ShareArrivalPhotoProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -59,19 +75,23 @@ export function ShareArrivalPhoto({
       `I received a moment from ${city}, ${country} on SomeWhere. Send one photo, receive somewhere. $WHERE`,
     [city, country],
   );
+  const shareUrl = useMemo(
+    () => (matchId ? `${getOrigin()}/share/${matchId}` : absoluteUrl(image)),
+    [image, matchId],
+  );
 
   const xShareUrl = useMemo(() => {
-    const url =
-      typeof window === "undefined" ? "https://somewherewall.com" : window.location.origin;
+    const params = new URLSearchParams({
+      text: caption,
+      url: shareUrl,
+    });
 
-    return `https://x.com/intent/post?text=${encodeURIComponent(
-      `${caption}\n${url}`,
-    )}`;
-  }, [caption]);
+    return `https://x.com/intent/post?${params.toString()}`;
+  }, [caption, shareUrl]);
 
-  async function copyCaption() {
-    await navigator.clipboard.writeText(caption);
-    setStatus("Caption copied.");
+  async function copyShareLink() {
+    await navigator.clipboard.writeText(shareUrl);
+    setStatus("Share link copied.");
   }
 
   async function sharePhotoWithFallback(target: "Instagram" | "X") {
@@ -86,6 +106,7 @@ export function ShareArrivalPhoto({
         files: [file],
         text: caption,
         title: "SomeWhere arrival",
+        url: shareUrl,
       };
 
       if (navigator.canShare?.(sharePayload)) {
@@ -94,27 +115,32 @@ export function ShareArrivalPhoto({
         return;
       }
 
-      await copyCaption();
       downloadFile(file);
       window.open(
-        target === "X" ? xShareUrl : "https://www.instagram.com/",
+        target === "X"
+          ? xShareUrl
+          : "https://www.instagram.com/create/select/",
         "_blank",
         "noopener,noreferrer",
       );
       setStatus(
-        `${target} web cannot attach a photo automatically here. Caption copied and photo downloaded.`,
+        target === "X"
+          ? "X compose opened. The photo file was downloaded so you can attach it to the post."
+          : "Instagram create opened. The photo file was downloaded so you can attach it to the post.",
       );
     } catch (error) {
-      await copyCaption();
+      await copyShareLink();
       window.open(
-        target === "X" ? xShareUrl : "https://www.instagram.com/",
+        target === "X"
+          ? xShareUrl
+          : "https://www.instagram.com/create/select/",
         "_blank",
         "noopener,noreferrer",
       );
       setStatus(
         error instanceof Error
-          ? `${error.message} Caption copied instead.`
-          : "Caption copied instead.",
+          ? `${error.message} Share link copied instead.`
+          : "Share link copied instead.",
       );
     }
   }
@@ -215,11 +241,11 @@ export function ShareArrivalPhoto({
               </button>
               <button
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#d8d0c2] bg-white px-3 text-sm font-semibold"
-                onClick={copyCaption}
+                onClick={copyShareLink}
                 type="button"
               >
                 <Copy size={16} strokeWidth={2} />
-                Copy
+                Copy link
               </button>
               <a
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#d8d0c2] bg-white px-3 text-sm font-semibold"
