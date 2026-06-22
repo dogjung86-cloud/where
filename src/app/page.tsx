@@ -10,7 +10,9 @@ import {
   ShieldCheck,
   Stamp,
 } from "lucide-react";
+import Link from "next/link";
 
+import { AdminNavLink } from "@/components/admin-nav-link";
 import { ArrivedMomentsSection } from "@/components/arrived-moments-section";
 import { AuthActions } from "@/components/auth-actions";
 import { LocationMapCard } from "@/components/location-map-card";
@@ -283,6 +285,13 @@ export default function Home() {
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            <Link
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-[#d8d0c2] bg-white px-3 text-sm font-semibold text-[#171717] transition hover:border-[#171717]"
+              href="/stats"
+            >
+              Stats
+            </Link>
+            <AdminNavLink />
             <a
               aria-label="SomeWhere on X"
               className="grid size-10 place-items-center rounded-lg border border-[#d8d0c2] bg-white text-sm font-black text-[#171717] transition hover:border-[#171717]"

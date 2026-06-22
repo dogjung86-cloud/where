@@ -374,6 +374,7 @@ export function ArrivedMomentsSection({
                   country={moment.country}
                   image={moment.image}
                   matchId={moment.matchId}
+                  photoId={moment.photoId}
                 />
                 <div className="p-3">
                   <div className="mb-2 min-w-0">
@@ -404,6 +405,7 @@ export function ArrivedMomentsSection({
                       country={moment.country}
                       image={moment.image}
                       matchId={moment.matchId}
+                      photoId={moment.photoId}
                       variant="icon"
                     />
                     <ReportPhotoButton

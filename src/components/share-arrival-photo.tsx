@@ -8,6 +8,7 @@ type ShareArrivalPhotoProps = {
   country: string;
   image: string;
   matchId?: string;
+  photoId?: string;
   variant?: "image" | "icon";
 };
 
@@ -66,6 +67,7 @@ export function ShareArrivalPhoto({
   country,
   image,
   matchId,
+  photoId,
   variant = "image",
 }: ShareArrivalPhotoProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -91,7 +93,25 @@ export function ShareArrivalPhoto({
 
   async function copyShareLink() {
     await navigator.clipboard.writeText(shareUrl);
+    await recordShareEvent("copy_link");
     setStatus("Share link copied.");
+  }
+
+  async function recordShareEvent(
+    target: "copy_link" | "instagram" | "native" | "save" | "x",
+  ) {
+    await fetch("/api/share/events", {
+      body: JSON.stringify({
+        matchId,
+        photoId,
+        shareUrl,
+        target,
+      }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    }).catch(() => null);
   }
 
   async function sharePhotoWithFallback(target: "Instagram" | "X") {
@@ -111,6 +131,7 @@ export function ShareArrivalPhoto({
 
       if (navigator.canShare?.(sharePayload)) {
         await navigator.share(sharePayload);
+        await recordShareEvent("native");
         setStatus(`Shared with photo. Choose ${target} from the share sheet.`);
         return;
       }
@@ -123,6 +144,7 @@ export function ShareArrivalPhoto({
         "_blank",
         "noopener,noreferrer",
       );
+      await recordShareEvent(target === "X" ? "x" : "instagram");
       setStatus(
         target === "X"
           ? "X compose opened. The photo file was downloaded so you can attach it to the post."
@@ -251,6 +273,9 @@ export function ShareArrivalPhoto({
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#d8d0c2] bg-white px-3 text-sm font-semibold"
                 download={`${filenameForArrival(city, country)}.webp`}
                 href={image}
+                onClick={() => {
+                  recordShareEvent("save").catch(() => null);
+                }}
               >
                 <Download size={16} strokeWidth={2} />
                 Save
