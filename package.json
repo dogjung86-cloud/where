@@ -14,6 +14,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "starter:photos": "node scripts/starter-photos.mjs --write",
+    "starter:photos:upload": "node scripts/starter-photos.mjs --upload",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

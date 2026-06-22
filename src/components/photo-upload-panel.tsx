@@ -1,7 +1,7 @@
 "use client";
 
 import type { ChangeEvent, DragEvent } from "react";
-import { ImagePlus, Lock, UploadCloud, X } from "lucide-react";
+import { Camera, ImagePlus, Lock, UploadCloud, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
@@ -25,6 +25,8 @@ type SignedUploadResponse = {
 type ArrivalNotice = {
   matchId: string;
   photoId: string;
+  starterPhotoId: string | null;
+  sourceType: "photo" | "starter";
   city: string;
   country: string;
   deliveredAt: string;
@@ -71,7 +73,8 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
 
 export function PhotoUploadPanel() {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const libraryInputRef = useRef<HTMLInputElement>(null);
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -165,12 +168,20 @@ export function PhotoUploadPanel() {
     setPanelMessage("Photo ready. Press Send photo to exchange it.", "info");
   }
 
-  function openFilePicker() {
+  function openLibraryPicker() {
     if (!requireSignIn()) {
       return;
     }
 
-    inputRef.current?.click();
+    libraryInputRef.current?.click();
+  }
+
+  function openCameraPicker() {
+    if (!requireSignIn()) {
+      return;
+    }
+
+    cameraInputRef.current?.click();
   }
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -383,11 +394,7 @@ export function PhotoUploadPanel() {
             </div>
           </>
         ) : (
-          <button
-            className="flex min-h-60 w-full cursor-pointer flex-col items-center justify-center gap-4 rounded-lg text-center focus:outline-none focus-visible:ring-4 focus-visible:ring-[#a8d8c1]/45"
-            onClick={openFilePicker}
-            type="button"
-          >
+          <div className="flex min-h-60 w-full flex-col items-center justify-center gap-4 rounded-lg text-center">
             <span className="grid size-14 place-items-center rounded-lg bg-[#e2f4ee] text-[#0d6b4f]">
               <UploadCloud size={28} strokeWidth={1.8} />
             </span>
@@ -395,16 +402,43 @@ export function PhotoUploadPanel() {
               Drop a current photo here
             </span>
             <span className="max-w-[20rem] text-sm leading-6 text-[#776e62]">
-              Click to choose a file, or drag an image into this box.
+              Drag an image into this box, choose one from your library, or
+              take a new photo now.
             </span>
-          </button>
+            <div className="grid w-full max-w-sm grid-cols-1 gap-2 sm:grid-cols-2">
+              <button
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[#d8d0c2] bg-white px-3 text-sm font-semibold text-[#171717] transition hover:border-[#171717]"
+                onClick={openLibraryPicker}
+                type="button"
+              >
+                <ImagePlus size={17} strokeWidth={2} />
+                Choose photo
+              </button>
+              <button
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[#171717] bg-[#171717] px-3 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={openCameraPicker}
+                type="button"
+              >
+                <Camera size={17} strokeWidth={2} />
+                Take photo
+              </button>
+            </div>
+          </div>
         )}
 
         <input
-          ref={inputRef}
+          ref={libraryInputRef}
           className="sr-only"
           type="file"
           accept="image/jpeg,image/png,image/webp,image/heic"
+          onChange={handleFileChange}
+        />
+        <input
+          ref={cameraInputRef}
+          className="sr-only"
+          type="file"
+          accept="image/*"
+          capture="environment"
           onChange={handleFileChange}
         />
       </div>

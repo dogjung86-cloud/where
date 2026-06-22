@@ -9,6 +9,7 @@ import {
   claimArrivalForReceiver,
   type ClaimedArrival,
 } from "@/lib/photos/arrivals";
+import { getRequestPhotoLocation } from "@/lib/geoip";
 import { createServiceSupabaseClient } from "@/lib/supabase/server";
 import { assertInboxHasSpace, inboxFullMessage } from "@/lib/where/entitlements";
 
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
 
     const { data: photo, error: photoError } = await supabase
       .from("photos")
-      .select("id, owner_id, original_path, status")
+      .select("id, owner_id, original_path, status, city_name, country_name")
       .eq("id", body.photoId)
       .eq("owner_id", user.id)
       .single();
@@ -128,14 +129,32 @@ export async function POST(request: NextRequest) {
       return jsonError(thumbnailUploadError.message, 500);
     }
 
+    const updatePayload: Record<string, string | number | null> = {
+      processed_path: processedPath,
+      thumbnail_path: thumbnailPath,
+      status: "ready",
+      processed_at: new Date().toISOString(),
+    };
+
+    if (!photo.city_name || !photo.country_name) {
+      const requestLocation = await getRequestPhotoLocation(request);
+
+      if (requestLocation) {
+        updatePayload.city_name = photo.city_name ?? requestLocation.cityName;
+        updatePayload.region_name = requestLocation.regionName;
+        updatePayload.country_code = requestLocation.countryCode;
+        updatePayload.country_name =
+          photo.country_name ?? requestLocation.countryName;
+        updatePayload.location_source = "ip";
+        updatePayload.display_lat = requestLocation.displayLat;
+        updatePayload.display_lng = requestLocation.displayLng;
+        updatePayload.accuracy_m = requestLocation.accuracyM;
+      }
+    }
+
     const { error: updateError } = await supabase
       .from("photos")
-      .update({
-        processed_path: processedPath,
-        thumbnail_path: thumbnailPath,
-        status: "ready",
-        processed_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq("id", photo.id);
 
     if (updateError) {

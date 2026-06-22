@@ -24,6 +24,8 @@ type ReportPhotoButtonProps = {
   country: string;
   matchId?: string;
   photoId?: string;
+  starterPhotoId?: string | null;
+  sourceType?: "photo" | "starter";
 };
 
 export function ReportPhotoButton({
@@ -31,6 +33,8 @@ export function ReportPhotoButton({
   country,
   matchId,
   photoId,
+  starterPhotoId,
+  sourceType = "photo",
 }: ReportPhotoButtonProps) {
   const [details, setDetails] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +50,11 @@ export function ReportPhotoButton({
     setIsSubmitting(true);
 
     try {
-      if (!photoId) {
+      const reportPhotoId = sourceType === "starter" ? undefined : photoId;
+      const reportStarterPhotoId =
+        sourceType === "starter" ? starterPhotoId ?? photoId : undefined;
+
+      if (!reportPhotoId && !reportStarterPhotoId) {
         setStatus(
           "Report flow ready. Real received photos will be sent to moderation.",
         );
@@ -70,8 +78,9 @@ export function ReportPhotoButton({
         body: JSON.stringify({
           details: details || undefined,
           matchId,
-          photoId,
+          photoId: reportPhotoId,
           reason,
+          starterPhotoId: reportStarterPhotoId,
         }),
         headers: {
           Authorization: `Bearer ${accessToken}`,

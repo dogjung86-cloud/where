@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { getAuthenticatedUser } from "@/lib/auth";
 import { getSupabaseConfig } from "@/lib/env";
+import { getRequestPhotoLocation } from "@/lib/geoip";
 import { jsonError, validationError } from "@/lib/http";
 import { getRequestIpHash } from "@/lib/moderation/ip";
 import { createServiceSupabaseClient } from "@/lib/supabase/server";
@@ -61,6 +62,21 @@ export async function POST(request: NextRequest) {
     const supabase = createServiceSupabaseClient();
     const { photoBucket } = getSupabaseConfig();
     const uploaderIpHash = getRequestIpHash(request);
+    const requestLocation =
+      body.cityName || body.countryName
+        ? null
+        : await getRequestPhotoLocation(request);
+    const cityName = body.cityName ?? requestLocation?.cityName ?? null;
+    const regionName = body.regionName ?? requestLocation?.regionName ?? null;
+    const countryCode =
+      body.countryCode ?? requestLocation?.countryCode ?? null;
+    const countryName =
+      body.countryName ?? requestLocation?.countryName ?? null;
+    const displayLat = body.displayLat ?? requestLocation?.displayLat ?? null;
+    const displayLng = body.displayLng ?? requestLocation?.displayLng ?? null;
+    const accuracyM = body.accuracyM ?? requestLocation?.accuracyM ?? null;
+    const locationSource =
+      body.locationSource === "ip" && requestLocation ? "ip" : body.locationSource;
 
     if (uploaderIpHash) {
       const { data: bannedIp, error: bannedIpError } = await supabase
@@ -93,14 +109,14 @@ export async function POST(request: NextRequest) {
       status: "awaiting_upload",
       content_type: body.contentType,
       byte_size: body.byteSize,
-      city_name: body.cityName ?? null,
-      region_name: body.regionName ?? null,
-      country_code: body.countryCode ?? null,
-      country_name: body.countryName ?? null,
-      location_source: body.locationSource,
-      display_lat: body.displayLat ?? null,
-      display_lng: body.displayLng ?? null,
-      accuracy_m: body.accuracyM ?? null,
+      city_name: cityName,
+      region_name: regionName,
+      country_code: countryCode,
+      country_name: countryName,
+      location_source: locationSource,
+      display_lat: displayLat,
+      display_lng: displayLng,
+      accuracy_m: accuracyM,
       uploader_ip_hash: uploaderIpHash,
       uploader_user_agent: request.headers.get("user-agent"),
     });

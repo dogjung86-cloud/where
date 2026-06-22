@@ -1,3 +1,4 @@
+import { isMissingStarterSchemaError } from "@/lib/starter-schema";
 import { createServiceSupabaseClient } from "@/lib/supabase/server";
 
 const ACCEPTED_PHOTO_STATUSES = ["ready", "matched", "reported", "expired"];
@@ -74,6 +75,7 @@ export async function getAppStats(): Promise<AppStats> {
     shares,
     openReports,
     cityResult,
+    starterCityResult,
     shareTargetsResult,
   ] = await Promise.all([
     getExactCount("profiles"),
@@ -87,6 +89,11 @@ export async function getAppStats(): Promise<AppStats> {
       .in("status", ACCEPTED_PHOTO_STATUSES)
       .not("city_name", "is", null)
       .returns<CityRow[]>(),
+    supabase
+      .from("starter_photos")
+      .select("city_name, country_name")
+      .eq("active", true)
+      .returns<CityRow[]>(),
     supabase.from("share_events").select("target").returns<ShareTargetRow[]>(),
   ]);
 
@@ -98,8 +105,18 @@ export async function getAppStats(): Promise<AppStats> {
     throw new Error(shareTargetsResult.error.message);
   }
 
+  if (
+    starterCityResult.error &&
+    !isMissingStarterSchemaError(starterCityResult.error)
+  ) {
+    throw new Error(starterCityResult.error.message);
+  }
+
+  const starterCities = starterCityResult.error
+    ? []
+    : (starterCityResult.data ?? []);
   const cityKeys = new Set(
-    (cityResult.data ?? []).map(
+    [...(cityResult.data ?? []), ...starterCities].map(
       (row) => `${row.city_name ?? ""}|${row.country_name ?? ""}`,
     ),
   );

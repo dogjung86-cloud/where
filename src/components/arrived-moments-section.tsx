@@ -18,6 +18,8 @@ export type ArrivedMoment = {
   map: string;
   matchId?: string;
   photoId?: string;
+  starterPhotoId?: string | null;
+  sourceType?: "photo" | "starter";
   region: string;
   time: string;
 };
@@ -28,12 +30,16 @@ type ApiInboxMoment = {
   deliveredAt: string;
   image: string | null;
   matchId: string;
-  photoId: string;
+  photoId: string | null;
+  starterPhotoId: string | null;
+  sourceType: "photo" | "starter";
 };
 
 type AppliedArrival = {
   matchId: string;
-  photoId: string;
+  photoId: string | null;
+  starterPhotoId: string | null;
+  sourceType: "photo" | "starter";
   city: string;
   country: string;
   deliveredAt: string;
@@ -127,7 +133,9 @@ export function ArrivedMomentsSection({
       image: arrival.thumbnailUrl ?? "/samples/sample-03.webp",
       map: mapPoint.map,
       matchId: arrival.matchId,
-      photoId: arrival.photoId,
+      photoId: arrival.photoId ?? undefined,
+      starterPhotoId: arrival.starterPhotoId,
+      sourceType: arrival.sourceType,
       region: mapPoint.region,
       time: formatArrivalTime(arrival.deliveredAt),
     };
@@ -157,6 +165,8 @@ export function ArrivedMomentsSection({
           deliveredAt: moment.deliveredAt,
           matchId: moment.matchId,
           photoId: moment.photoId,
+          starterPhotoId: moment.starterPhotoId,
+          sourceType: moment.sourceType,
           thumbnailUrl: moment.image,
         }),
       ),
@@ -375,6 +385,8 @@ export function ArrivedMomentsSection({
                   image={moment.image}
                   matchId={moment.matchId}
                   photoId={moment.photoId}
+                  starterPhotoId={moment.starterPhotoId}
+                  sourceType={moment.sourceType}
                 />
                 <div className="p-3">
                   <div className="mb-2 min-w-0">
@@ -406,6 +418,8 @@ export function ArrivedMomentsSection({
                       image={moment.image}
                       matchId={moment.matchId}
                       photoId={moment.photoId}
+                      starterPhotoId={moment.starterPhotoId}
+                      sourceType={moment.sourceType}
                       variant="icon"
                     />
                     <ReportPhotoButton
@@ -413,6 +427,8 @@ export function ArrivedMomentsSection({
                       country={moment.country}
                       matchId={moment.matchId}
                       photoId={moment.photoId}
+                      starterPhotoId={moment.starterPhotoId}
+                      sourceType={moment.sourceType}
                     />
                     <button
                       aria-label={`Remove photo from ${moment.city}, ${moment.country} from inbox`}

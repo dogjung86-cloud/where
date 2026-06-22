@@ -8,12 +8,17 @@ import { createServiceSupabaseClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
-const reportPhotoSchema = z.object({
-  details: z.string().trim().max(500).optional(),
-  matchId: z.string().uuid().optional(),
-  photoId: z.string().uuid(),
-  reason: z.enum(["sexual", "abuse", "gore", "spam", "other"]),
-});
+const reportPhotoSchema = z
+  .object({
+    details: z.string().trim().max(500).optional(),
+    matchId: z.string().uuid().optional(),
+    photoId: z.string().uuid().optional(),
+    reason: z.enum(["sexual", "abuse", "gore", "spam", "other"]),
+    starterPhotoId: z.string().uuid().optional(),
+  })
+  .refine((body) => Boolean(body.photoId) !== Boolean(body.starterPhotoId), {
+    message: "Report exactly one photo source",
+  });
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,6 +30,78 @@ export async function POST(request: NextRequest) {
 
     const body = reportPhotoSchema.parse(await request.json());
     const supabase = createServiceSupabaseClient();
+
+    if (body.starterPhotoId) {
+      const { data: starterPhoto, error: starterPhotoError } = await supabase
+        .from("starter_photos")
+        .select("id")
+        .eq("id", body.starterPhotoId)
+        .eq("active", true)
+        .single();
+
+      if (starterPhotoError || !starterPhoto) {
+        return jsonError("Photo not found", 404);
+      }
+
+      let matchQuery = supabase
+        .from("photo_matches")
+        .select("id")
+        .eq("starter_photo_id", starterPhoto.id)
+        .eq("receiver_id", user.id);
+
+      if (body.matchId) {
+        matchQuery = matchQuery.eq("id", body.matchId);
+      }
+
+      const { data: match, error: matchError } =
+        await matchQuery.maybeSingle();
+
+      if (matchError) {
+        return jsonError(matchError.message, 500);
+      }
+
+      if (!match) {
+        return jsonError("Only receivers can report an arrived photo", 403);
+      }
+
+      const { data: report, error: reportError } = await supabase
+        .from("photo_reports")
+        .insert({
+          details: body.details ?? null,
+          match_id: match.id,
+          photo_id: null,
+          reason: body.reason,
+          reported_owner_id: null,
+          reporter_id: user.id,
+          reporter_ip_hash: getRequestIpHash(request),
+          starter_photo_id: starterPhoto.id,
+        })
+        .select("id")
+        .single();
+
+      if (reportError) {
+        if (reportError.code === "23505") {
+          return jsonError("You already reported this photo", 409);
+        }
+
+        return jsonError(reportError.message, 500);
+      }
+
+      await supabase
+        .from("photo_matches")
+        .update({ reported_at: new Date().toISOString() })
+        .eq("id", match.id);
+
+      return NextResponse.json({
+        reportId: report.id,
+        reportCount: null,
+        status: "reported",
+      });
+    }
+
+    if (!body.photoId) {
+      return jsonError("Photo not found", 404);
+    }
 
     const { data: photo, error: photoError } = await supabase
       .from("photos")

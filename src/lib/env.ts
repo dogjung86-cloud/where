@@ -53,3 +53,10 @@ export function getModerationConfig() {
     ),
   };
 }
+
+export function getGeoIpConfig() {
+  return {
+    endpoint: getOptionalEnv("IP_GEOLOCATION_URL", "https://ipwho.is/{ip}"),
+    timeoutMs: Number(getOptionalEnv("IP_GEOLOCATION_TIMEOUT_MS", "2500")),
+  };
+}

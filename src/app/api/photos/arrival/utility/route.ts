@@ -5,6 +5,7 @@ import { getAuthenticatedUser } from "@/lib/auth";
 import { getSupabaseConfig } from "@/lib/env";
 import { jsonError, validationError } from "@/lib/http";
 import { claimArrivalForReceiver } from "@/lib/photos/arrivals";
+import { isMissingStarterSchemaError } from "@/lib/starter-schema";
 import { createServiceSupabaseClient } from "@/lib/supabase/server";
 import { assertInboxHasSpace, inboxFullMessage } from "@/lib/where/entitlements";
 
@@ -22,7 +23,8 @@ type SpendRow = {
 
 type MatchRow = {
   id: string;
-  photo_id: string;
+  photo_id: string | null;
+  starter_photo_id: string | null;
   receiver_id: string;
   receiver_deleted_at: string | null;
 };
@@ -62,11 +64,26 @@ export async function POST(request: NextRequest) {
         return jsonError("targetMatchId is required for Try another city", 400);
       }
 
-      const { data: match, error: matchError } = await supabase
+      const matchResult = await supabase
         .from("photo_matches")
-        .select("id, photo_id, receiver_id, receiver_deleted_at")
+        .select("id, photo_id, starter_photo_id, receiver_id, receiver_deleted_at")
         .eq("id", body.targetMatchId)
         .single<MatchRow>();
+      let match = matchResult.data;
+      let matchError = matchResult.error;
+
+      if (matchError && isMissingStarterSchemaError(matchError)) {
+        const legacyMatchResult = await supabase
+          .from("photo_matches")
+          .select("id, photo_id, receiver_id, receiver_deleted_at")
+          .eq("id", body.targetMatchId)
+          .single<Omit<MatchRow, "starter_photo_id">>();
+
+        match = legacyMatchResult.data
+          ? { ...legacyMatchResult.data, starter_photo_id: null }
+          : null;
+        matchError = legacyMatchResult.error;
+      }
 
       if (matchError || !match) {
         return jsonError("Arrival not found", 404);
@@ -76,13 +93,19 @@ export async function POST(request: NextRequest) {
         return jsonError("Arrival is not available in your inbox", 403);
       }
 
-      const { data: currentPhoto, error: currentPhotoError } = await supabase
-        .from("photos")
-        .select("id, city_name")
-        .eq("id", match.photo_id)
-        .single<{ id: string; city_name: string | null }>();
+      const currentPhoto = match.photo_id
+        ? await supabase
+            .from("photos")
+            .select("id, city_name")
+            .eq("id", match.photo_id)
+            .single<{ id: string; city_name: string | null }>()
+        : await supabase
+            .from("starter_photos")
+            .select("id, city_name")
+            .eq("id", match.starter_photo_id)
+            .single<{ id: string; city_name: string | null }>();
 
-      if (currentPhotoError || !currentPhoto) {
+      if (currentPhoto.error || !currentPhoto.data) {
         return jsonError("Arrival photo not found", 404);
       }
 
@@ -91,8 +114,10 @@ export async function POST(request: NextRequest) {
         photoBucket,
         user.id,
         {
-          excludeCities: currentPhoto.city_name ? [currentPhoto.city_name] : [],
-          excludePhotoIds: [currentPhoto.id],
+          excludeCities: currentPhoto.data.city_name
+            ? [currentPhoto.data.city_name]
+            : [],
+          excludePhotoIds: [currentPhoto.data.id],
         },
       );
 

@@ -22,14 +22,15 @@ type AdminReport = {
     createdAt: string;
     id: string;
     imageUrl: string | null;
-    ownerId: string;
-    reportCount: number;
+    ownerId: string | null;
+    reportCount: number | null;
+    sourceType: "photo" | "starter";
     status: string;
     uploaderIpHash: string | null;
   } | null;
-  photoId: string;
+  photoId: string | null;
   reason: string;
-  reportedOwnerId: string;
+  reportedOwnerId: string | null;
   reporterId: string;
   reporterIpHash: string | null;
   reviewedAt: string | null;
@@ -232,7 +233,9 @@ export function AdminDashboard() {
 
     const response = await fetch("/api/admin/reports", {
       body: JSON.stringify({
-        photoId: report.photo.id,
+        photoId: report.photo.sourceType === "photo" ? report.photo.id : undefined,
+        starterPhotoId:
+          report.photo.sourceType === "starter" ? report.photo.id : undefined,
       }),
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -250,7 +253,7 @@ export function AdminDashboard() {
     }
 
     setReports((current) =>
-      current.filter((item) => item.photoId !== report.photoId),
+      current.filter((item) => item.id !== report.id),
     );
     setStatus("Reported photo deleted.");
   }
@@ -364,9 +367,17 @@ export function AdminDashboard() {
 
                 <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-[#776e62] sm:grid-cols-2 lg:grid-cols-3">
                   <p>Report ID: {shortId(report.id)}</p>
-                  <p>Photo ID: {shortId(report.photoId)}</p>
+                  <p>
+                    Photo ID:{" "}
+                    {report.photoId ? shortId(report.photoId) : "Missing"}
+                  </p>
                   <p>Reporter: {shortId(report.reporterId)}</p>
-                  <p>Owner: {shortId(report.reportedOwnerId)}</p>
+                  <p>
+                    Owner:{" "}
+                    {report.reportedOwnerId
+                      ? shortId(report.reportedOwnerId)
+                      : "System pool"}
+                  </p>
                   <p>Reporter IP: {report.reporterIpHash ?? "None"}</p>
                   <p>Uploader IP: {report.photo?.uploaderIpHash ?? "None"}</p>
                   <p>Photo status: {report.photo?.status ?? "missing"}</p>

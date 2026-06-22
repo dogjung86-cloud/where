@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getAdminUser } from "@/lib/admin";
 import { getSupabaseConfig } from "@/lib/env";
 import { jsonError, validationError } from "@/lib/http";
+import { isMissingStarterSchemaError } from "@/lib/starter-schema";
 import { createServiceSupabaseClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -13,12 +14,13 @@ type ReportRow = {
   created_at: string;
   details: string | null;
   match_id: string | null;
-  photo_id: string;
+  photo_id: string | null;
   reason: string;
-  reported_owner_id: string;
+  reported_owner_id: string | null;
   reporter_id: string;
   reporter_ip_hash: string | null;
   reviewed_at: string | null;
+  starter_photo_id: string | null;
   status: string;
   photos: {
     city_name: string | null;
@@ -33,10 +35,23 @@ type ReportRow = {
     thumbnail_path: string | null;
     uploader_ip_hash: string | null;
   } | null;
+  starter_photos: {
+    city_name: string;
+    country_name: string;
+    created_at: string;
+    id: string;
+    processed_path: string;
+    thumbnail_path: string | null;
+  } | null;
 };
 
+type LegacyReportRow = Omit<ReportRow, "starter_photo_id" | "starter_photos">;
+
 const deletePhotoSchema = z.object({
-  photoId: z.string().uuid(),
+  photoId: z.string().uuid().optional(),
+  starterPhotoId: z.string().uuid().optional(),
+}).refine((body) => Boolean(body.photoId) !== Boolean(body.starterPhotoId), {
+  message: "Delete exactly one photo source",
 });
 
 const updateReportSchema = z.object({
@@ -62,7 +77,7 @@ export async function GET(request: NextRequest) {
 
     const supabase = createServiceSupabaseClient();
     const { photoBucket } = getSupabaseConfig();
-    const { data, error } = await supabase
+    const reportResult = await supabase
       .from("photo_reports")
       .select(
         [
@@ -76,6 +91,7 @@ export async function GET(request: NextRequest) {
           "reporter_id",
           "reporter_ip_hash",
           "reviewed_at",
+          "starter_photo_id",
           "status",
           [
             "photos(",
@@ -94,11 +110,73 @@ export async function GET(request: NextRequest) {
             ].join(", "),
             ")",
           ].join(""),
+          [
+            "starter_photos(",
+            [
+              "city_name",
+              "country_name",
+              "created_at",
+              "id",
+              "processed_path",
+              "thumbnail_path",
+            ].join(", "),
+            ")",
+          ].join(""),
         ].join(", "),
       )
       .order("created_at", { ascending: false })
       .limit(100)
       .returns<ReportRow[]>();
+    let data = reportResult.data;
+    let error = reportResult.error;
+
+    if (error && isMissingStarterSchemaError(error)) {
+      const legacyReportResult = await supabase
+        .from("photo_reports")
+        .select(
+          [
+            "id",
+            "created_at",
+            "details",
+            "match_id",
+            "photo_id",
+            "reason",
+            "reported_owner_id",
+            "reporter_id",
+            "reporter_ip_hash",
+            "reviewed_at",
+            "status",
+            [
+              "photos(",
+              [
+                "city_name",
+                "country_name",
+                "created_at",
+                "id",
+                "original_path",
+                "owner_id",
+                "processed_path",
+                "report_count",
+                "status",
+                "thumbnail_path",
+                "uploader_ip_hash",
+              ].join(", "),
+              ")",
+            ].join(""),
+          ].join(", "),
+        )
+        .order("created_at", { ascending: false })
+        .limit(100)
+        .returns<LegacyReportRow[]>();
+
+      data =
+        legacyReportResult.data?.map((report) => ({
+          ...report,
+          starter_photo_id: null,
+          starter_photos: null,
+        })) ?? null;
+      error = legacyReportResult.error;
+    }
 
     if (error) {
       return jsonError(error.message, 500);
@@ -106,8 +184,9 @@ export async function GET(request: NextRequest) {
 
     const reports = await Promise.all(
       (data ?? []).map(async (report) => {
+        const source = report.photos ?? report.starter_photos;
         const imagePath =
-          report.photos?.thumbnail_path ?? report.photos?.processed_path ?? null;
+          source?.thumbnail_path ?? source?.processed_path ?? null;
         let imageUrl: string | null = null;
 
         if (imagePath) {
@@ -132,11 +211,25 @@ export async function GET(request: NextRequest) {
                 imageUrl,
                 ownerId: report.photos.owner_id,
                 reportCount: report.photos.report_count,
+                sourceType: "photo",
                 status: report.photos.status,
                 uploaderIpHash: compactHash(report.photos.uploader_ip_hash),
               }
+            : report.starter_photos
+              ? {
+                  city: report.starter_photos.city_name,
+                  country: report.starter_photos.country_name,
+                  createdAt: report.starter_photos.created_at,
+                  id: report.starter_photos.id,
+                  imageUrl,
+                  ownerId: null,
+                  reportCount: null,
+                  sourceType: "starter",
+                  status: "starter",
+                  uploaderIpHash: null,
+                }
             : null,
-          photoId: report.photo_id,
+          photoId: report.photo_id ?? report.starter_photo_id,
           reason: report.reason,
           reportedOwnerId: report.reported_owner_id,
           reporterId: report.reporter_id,
@@ -202,6 +295,61 @@ export async function DELETE(request: NextRequest) {
     const body = deletePhotoSchema.parse(await request.json());
     const supabase = createServiceSupabaseClient();
     const { photoBucket } = getSupabaseConfig();
+
+    if (body.starterPhotoId) {
+      const { data: starterPhoto, error: starterPhotoError } = await supabase
+        .from("starter_photos")
+        .select("id, processed_path, thumbnail_path")
+        .eq("id", body.starterPhotoId)
+        .maybeSingle<{
+          id: string;
+          processed_path: string;
+          thumbnail_path: string | null;
+        }>();
+
+      if (starterPhotoError) {
+        return jsonError(starterPhotoError.message, 500);
+      }
+
+      if (!starterPhoto) {
+        return jsonError("Photo not found", 404);
+      }
+
+      const paths = [
+        starterPhoto.processed_path,
+        starterPhoto.thumbnail_path,
+      ].filter((path): path is string => Boolean(path));
+
+      if (paths.length) {
+        const { error: storageError } = await supabase.storage
+          .from(photoBucket)
+          .remove(paths);
+
+        if (storageError) {
+          return jsonError(storageError.message, 500);
+        }
+      }
+
+      const { error: deleteError } = await supabase
+        .from("starter_photos")
+        .delete()
+        .eq("id", starterPhoto.id);
+
+      if (deleteError) {
+        return jsonError(deleteError.message, 500);
+      }
+
+      return NextResponse.json({
+        deletedPaths: paths.length,
+        starterPhotoId: starterPhoto.id,
+        status: "deleted",
+      });
+    }
+
+    if (!body.photoId) {
+      return jsonError("Photo not found", 404);
+    }
+
     const { data: photo, error: photoError } = await supabase
       .from("photos")
       .select("id, original_path, processed_path, thumbnail_path")

@@ -47,11 +47,13 @@ export async function DELETE(request: NextRequest) {
       return jsonError(deleteError.message, 500);
     }
 
-    await supabase
-      .from("photos")
-      .update({ status: "expired" })
-      .eq("id", match.photo_id)
-      .eq("status", "matched");
+    if (match.photo_id) {
+      await supabase
+        .from("photos")
+        .update({ status: "expired" })
+        .eq("id", match.photo_id)
+        .eq("status", "matched");
+    }
 
     return NextResponse.json({
       status: "deleted",

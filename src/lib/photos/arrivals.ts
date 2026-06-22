@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { isMissingStarterSchemaError } from "@/lib/starter-schema";
+
 type ArrivalCandidate = {
   id: string;
   owner_id: string;
@@ -7,6 +9,14 @@ type ArrivalCandidate = {
   thumbnail_path: string | null;
   city_name: string | null;
   country_name: string | null;
+};
+
+type StarterArrivalCandidate = {
+  id: string;
+  processed_path: string;
+  thumbnail_path: string | null;
+  city_name: string;
+  country_name: string;
 };
 
 type ClaimArrivalOptions = {
@@ -18,6 +28,8 @@ type ClaimArrivalOptions = {
 export type ClaimedArrival = {
   matchId: string;
   photoId: string;
+  starterPhotoId: string | null;
+  sourceType: "photo" | "starter";
   city: string;
   country: string;
   deliveredAt: string;
@@ -34,9 +46,32 @@ export async function getReceiverCollectedCities(
 ) {
   const { data, error } = await supabase
     .from("photo_matches")
-    .select("photos(city_name)")
+    .select("photos(city_name), starter_photos(city_name)")
     .eq("receiver_id", receiverId)
-    .returns<Array<{ photos: { city_name: string | null } | null }>>();
+    .returns<
+      Array<{
+        photos: { city_name: string | null } | null;
+        starter_photos: { city_name: string | null } | null;
+      }>
+    >();
+
+  if (error && isMissingStarterSchemaError(error)) {
+    const { data: legacyData, error: legacyError } = await supabase
+      .from("photo_matches")
+      .select("photos(city_name)")
+      .eq("receiver_id", receiverId)
+      .returns<Array<{ photos: { city_name: string | null } | null }>>();
+
+    if (legacyError) {
+      throw new Error(legacyError.message);
+    }
+
+    return new Set(
+      (legacyData ?? [])
+        .map((match) => normalizeCity(match.photos?.city_name ?? null))
+        .filter(Boolean),
+    );
+  }
 
   if (error) {
     throw new Error(error.message);
@@ -44,7 +79,10 @@ export async function getReceiverCollectedCities(
 
   return new Set(
     (data ?? [])
-      .map((match) => normalizeCity(match.photos?.city_name ?? null))
+      .flatMap((match) => [
+        normalizeCity(match.photos?.city_name ?? null),
+        normalizeCity(match.starter_photos?.city_name ?? null),
+      ])
       .filter(Boolean),
   );
 }
@@ -79,25 +117,6 @@ export async function claimArrivalForReceiver(
     throw new Error(candidateError.message);
   }
 
-  if (!candidates?.length) {
-    return null;
-  }
-
-  const candidateIds = candidates.map((candidate) => candidate.id);
-  const { data: existingMatches, error: existingMatchError } = await supabase
-    .from("photo_matches")
-    .select("photo_id")
-    .eq("receiver_id", receiverId)
-    .in("photo_id", candidateIds)
-    .returns<Array<{ photo_id: string }>>();
-
-  if (existingMatchError) {
-    throw new Error(existingMatchError.message);
-  }
-
-  const alreadyReceivedPhotoIds = new Set(
-    (existingMatches ?? []).map((match) => match.photo_id),
-  );
   const excludedPhotoIds = new Set(options.excludePhotoIds ?? []);
   const excludedCities = new Set(
     (options.excludeCities ?? []).map((city) => city.trim().toLowerCase()),
@@ -106,11 +125,149 @@ export async function claimArrivalForReceiver(
     ? await getReceiverCollectedCities(supabase, receiverId)
     : new Set<string>();
 
-  for (const candidate of candidates) {
+  if (candidates?.length) {
+    const candidateIds = candidates.map((candidate) => candidate.id);
+    const { data: existingMatches, error: existingMatchError } = await supabase
+      .from("photo_matches")
+      .select("photo_id")
+      .eq("receiver_id", receiverId)
+      .in("photo_id", candidateIds)
+      .returns<Array<{ photo_id: string }>>();
+
+    if (existingMatchError) {
+      throw new Error(existingMatchError.message);
+    }
+
+    const alreadyReceivedPhotoIds = new Set(
+      (existingMatches ?? []).map((match) => match.photo_id),
+    );
+
+    for (const candidate of candidates) {
+      const candidateCity = normalizeCity(candidate.city_name);
+
+      if (
+        alreadyReceivedPhotoIds.has(candidate.id) ||
+        excludedPhotoIds.has(candidate.id) ||
+        excludedCities.has(candidateCity) ||
+        (options.requireUncollectedCity && collectedCities.has(candidateCity))
+      ) {
+        continue;
+      }
+
+      const { data: claimedRows, error: claimError } = await supabase
+        .from("photos")
+        .update({ status: "matched" })
+        .eq("id", candidate.id)
+        .eq("status", "ready")
+        .select("id")
+        .returns<Array<{ id: string }>>();
+
+      if (claimError) {
+        throw new Error(claimError.message);
+      }
+
+      if (!claimedRows?.length) {
+        continue;
+      }
+
+      const { data: matchRows, error: matchError } = await supabase
+        .from("photo_matches")
+        .insert({
+          photo_id: candidate.id,
+          sender_id: candidate.owner_id,
+          receiver_id: receiverId,
+        })
+        .select("id, delivered_at")
+        .returns<Array<{ id: string; delivered_at: string }>>();
+
+      if (matchError || !matchRows?.[0]) {
+        await supabase
+          .from("photos")
+          .update({ status: "ready" })
+          .eq("id", candidate.id);
+
+        throw new Error(
+          matchError?.message || "Unable to create arrival match",
+        );
+      }
+
+      const imagePath = candidate.thumbnail_path ?? candidate.processed_path;
+      let thumbnailUrl: string | null = null;
+
+      if (imagePath) {
+        const { data: signedImage } = await supabase.storage
+          .from(photoBucket)
+          .createSignedUrl(imagePath, 60 * 30);
+
+        thumbnailUrl = signedImage?.signedUrl ?? null;
+      }
+
+      return {
+        matchId: matchRows[0].id,
+        photoId: candidate.id,
+        starterPhotoId: null,
+        sourceType: "photo",
+        city: candidate.city_name ?? "Somewhere",
+        country: candidate.country_name ?? "Unknown country",
+        deliveredAt: matchRows[0].delivered_at,
+        thumbnailUrl,
+      };
+    }
+  }
+
+  const { data: starterCandidates, error: starterCandidateError } = await supabase
+    .from("starter_photos")
+    .select(
+      [
+        "id",
+        "processed_path",
+        "thumbnail_path",
+        "city_name",
+        "country_name",
+      ].join(", "),
+    )
+    .eq("active", true)
+    .order("delivered_count", { ascending: true })
+    .order("created_at", { ascending: true })
+    .limit(64)
+    .returns<StarterArrivalCandidate[]>();
+
+  if (starterCandidateError && isMissingStarterSchemaError(starterCandidateError)) {
+    return null;
+  }
+
+  if (starterCandidateError) {
+    throw new Error(starterCandidateError.message);
+  }
+
+  if (!starterCandidates?.length) {
+    return null;
+  }
+
+  const starterCandidateIds = starterCandidates.map((candidate) => candidate.id);
+  const { data: existingStarterMatches, error: existingStarterMatchError } =
+    await supabase
+      .from("photo_matches")
+      .select("starter_photo_id")
+      .eq("receiver_id", receiverId)
+      .in("starter_photo_id", starterCandidateIds)
+      .returns<Array<{ starter_photo_id: string | null }>>();
+
+  if (existingStarterMatchError) {
+    throw new Error(existingStarterMatchError.message);
+  }
+
+  const alreadyReceivedStarterPhotoIds = new Set(
+    (existingStarterMatches ?? [])
+      .map((match) => match.starter_photo_id)
+      .filter((id): id is string => Boolean(id)),
+  );
+
+  for (const candidate of starterCandidates) {
     const candidateCity = normalizeCity(candidate.city_name);
 
     if (
-      alreadyReceivedPhotoIds.has(candidate.id) ||
+      alreadyReceivedStarterPhotoIds.has(candidate.id) ||
       excludedPhotoIds.has(candidate.id) ||
       excludedCities.has(candidateCity) ||
       (options.requireUncollectedCity && collectedCities.has(candidateCity))
@@ -118,58 +275,42 @@ export async function claimArrivalForReceiver(
       continue;
     }
 
-    const { data: claimedRows, error: claimError } = await supabase
-      .from("photos")
-      .update({ status: "matched" })
-      .eq("id", candidate.id)
-      .eq("status", "ready")
-      .select("id")
-      .returns<Array<{ id: string }>>();
-
-    if (claimError) {
-      throw new Error(claimError.message);
-    }
-
-    if (!claimedRows?.length) {
-      continue;
-    }
-
     const { data: matchRows, error: matchError } = await supabase
       .from("photo_matches")
       .insert({
-        photo_id: candidate.id,
-        sender_id: candidate.owner_id,
+        photo_id: null,
         receiver_id: receiverId,
+        starter_photo_id: candidate.id,
+        sender_id: null,
       })
       .select("id, delivered_at")
       .returns<Array<{ id: string; delivered_at: string }>>();
 
     if (matchError || !matchRows?.[0]) {
-      await supabase
-        .from("photos")
-        .update({ status: "ready" })
-        .eq("id", candidate.id);
-
-      throw new Error(matchError?.message || "Unable to create arrival match");
+      throw new Error(matchError?.message || "Unable to create starter arrival");
     }
+
+    await supabase.rpc("increment_starter_photo_delivery", {
+      starter_photo_id_input: candidate.id,
+    });
 
     const imagePath = candidate.thumbnail_path ?? candidate.processed_path;
     let thumbnailUrl: string | null = null;
 
-    if (imagePath) {
-      const { data: signedImage } = await supabase.storage
-        .from(photoBucket)
-        .createSignedUrl(imagePath, 60 * 30);
+    const { data: signedImage } = await supabase.storage
+      .from(photoBucket)
+      .createSignedUrl(imagePath, 60 * 30);
 
-      thumbnailUrl = signedImage?.signedUrl ?? null;
-    }
+    thumbnailUrl = signedImage?.signedUrl ?? null;
 
     return {
+      city: candidate.city_name,
+      country: candidate.country_name,
+      deliveredAt: matchRows[0].delivered_at,
       matchId: matchRows[0].id,
       photoId: candidate.id,
-      city: candidate.city_name ?? "Somewhere",
-      country: candidate.country_name ?? "Unknown country",
-      deliveredAt: matchRows[0].delivered_at,
+      starterPhotoId: candidate.id,
+      sourceType: "starter",
       thumbnailUrl,
     };
   }

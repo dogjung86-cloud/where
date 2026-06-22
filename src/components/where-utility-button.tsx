@@ -4,6 +4,7 @@ import { MapPin, Shuffle, X } from "lucide-react";
 import { Transaction } from "@solana/web3.js";
 import { useState } from "react";
 
+import { openPhantomForCurrentPage } from "@/lib/phantom-mobile";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 type UtilityKey = "city_reroll" | "uncollected_city";
@@ -11,6 +12,8 @@ type UtilityKey = "city_reroll" | "uncollected_city";
 type AppliedArrival = {
   matchId: string;
   photoId: string;
+  starterPhotoId: string | null;
+  sourceType: "photo" | "starter";
   city: string;
   country: string;
   deliveredAt: string;
@@ -128,7 +131,12 @@ export function WhereUtilityButton({
       const provider = getPhantomProvider();
 
       if (!provider?.isPhantom || !provider.signAndSendTransaction) {
-        throw new Error("Please install or unlock Phantom wallet.");
+        const target = openPhantomForCurrentPage();
+        throw new Error(
+          target === "mobile"
+            ? "Opening this page in Phantom. Use this action again inside the Phantom app."
+            : "Please install or unlock Phantom wallet.",
+        );
       }
 
       onStatus?.(`Opening Phantom for ${copy.cost}...`);

@@ -12,6 +12,8 @@ type ShareArrivalPhotoProps = {
   image: string;
   matchId?: string;
   photoId?: string;
+  starterPhotoId?: string | null;
+  sourceType?: "photo" | "starter";
   variant?: "image" | "icon";
 };
 
@@ -136,6 +138,8 @@ export function ShareArrivalPhoto({
   image,
   matchId,
   photoId,
+  starterPhotoId,
+  sourceType = "photo",
   variant = "image",
 }: ShareArrivalPhotoProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -179,7 +183,8 @@ export function ShareArrivalPhoto({
     await fetch("/api/share/events", {
       body: JSON.stringify({
         matchId,
-        photoId,
+        photoId: sourceType === "starter" ? undefined : photoId,
+        starterPhotoId: sourceType === "starter" ? starterPhotoId ?? photoId : null,
         shareUrl,
         target,
       }),

@@ -11,6 +11,7 @@ import {
   getUserDisplayName,
   getVerifiedSolanaWalletAddress,
 } from "@/lib/auth-profile";
+import { openPhantomForCurrentPage } from "@/lib/phantom-mobile";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 type PendingProvider = "google" | "phantom" | "sign_out";
@@ -200,7 +201,12 @@ export function AuthActions({ compact = false }: { compact?: boolean }) {
     const provider = getPhantomProvider();
 
     if (!provider) {
-      window.open("https://phantom.app/", "_blank", "noopener,noreferrer");
+      const target = openPhantomForCurrentPage();
+      setAuthError(
+        target === "mobile"
+          ? "Opening this page in Phantom. Continue login inside the Phantom app."
+          : "Install or unlock Phantom, then try again.",
+      );
       setPending(null);
       return;
     }

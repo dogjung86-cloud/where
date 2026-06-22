@@ -19,6 +19,8 @@
 
 # production
 /build
+/.starter-output
+/.starter-source
 
 # misc
 .DS_Store

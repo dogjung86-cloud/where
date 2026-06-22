@@ -1,19 +1,32 @@
 import { cache } from "react";
 
 import { getOptionalEnv, getSupabaseConfig } from "@/lib/env";
+import { isMissingStarterSchemaError } from "@/lib/starter-schema";
 import { createServiceSupabaseClient } from "@/lib/supabase/server";
 
 type ShareMatchRow = {
   id: string;
   delivered_at: string;
   receiver_deleted_at: string | null;
+  starter_photo_id: string | null;
   photos: {
     city_name: string | null;
     country_name: string | null;
     processed_path: string | null;
     thumbnail_path: string | null;
   } | null;
+  starter_photos: {
+    city_name: string;
+    country_name: string;
+    processed_path: string;
+    thumbnail_path: string | null;
+  } | null;
 };
+
+type LegacyShareMatchRow = Omit<
+  ShareMatchRow,
+  "starter_photo_id" | "starter_photos"
+>;
 
 export type PublicShareArrival = {
   city: string;
@@ -44,25 +57,60 @@ export const getPublicShareArrival = cache(
 
     const supabase = createServiceSupabaseClient();
     const { photoBucket } = getSupabaseConfig();
-    const { data, error } = await supabase
+    const shareResult = await supabase
       .from("photo_matches")
       .select(
         [
           "id",
           "delivered_at",
           "receiver_deleted_at",
+          "starter_photo_id",
           "photos(city_name, country_name, processed_path, thumbnail_path)",
+          "starter_photos(city_name, country_name, processed_path, thumbnail_path)",
         ].join(", "),
       )
       .eq("id", matchId)
       .is("receiver_deleted_at", null)
       .maybeSingle<ShareMatchRow>();
+    let data = shareResult.data;
+    let error = shareResult.error;
 
-    if (error || !data?.photos) {
+    if (error && isMissingStarterSchemaError(error)) {
+      const legacyShareResult = await supabase
+        .from("photo_matches")
+        .select(
+          [
+            "id",
+            "delivered_at",
+            "receiver_deleted_at",
+            "photos(city_name, country_name, processed_path, thumbnail_path)",
+          ].join(", "),
+        )
+        .eq("id", matchId)
+        .is("receiver_deleted_at", null)
+        .maybeSingle<LegacyShareMatchRow>();
+
+      data = legacyShareResult.data
+        ? {
+            ...legacyShareResult.data,
+            starter_photo_id: null,
+            starter_photos: null,
+          }
+        : null;
+      error = legacyShareResult.error;
+    }
+
+    if (error || !data) {
       return null;
     }
 
-    const imagePath = data.photos.processed_path ?? data.photos.thumbnail_path;
+    const source = data.photos ?? data.starter_photos;
+
+    if (!source) {
+      return null;
+    }
+
+    const imagePath = source.processed_path ?? source.thumbnail_path;
 
     if (!imagePath) {
       return null;
@@ -77,8 +125,8 @@ export const getPublicShareArrival = cache(
     }
 
     return {
-      city: data.photos.city_name ?? "Somewhere",
-      country: data.photos.country_name ?? "Unknown country",
+      city: source.city_name ?? "Somewhere",
+      country: source.country_name ?? "Unknown country",
       deliveredAt: data.delivered_at,
       imagePath,
       imageUrl: signedImage.signedUrl,
