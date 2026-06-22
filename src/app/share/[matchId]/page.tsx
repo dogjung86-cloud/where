@@ -42,10 +42,11 @@ export async function generateMetadata({
       description,
       images: [
         {
-          url: arrival.imageUrl,
+          url: arrival.ogImageUrl,
           width: 1200,
-          height: 1500,
+          height: 630,
           alt: title,
+          type: "image/jpeg",
         },
       ],
       type: "article",
@@ -55,7 +56,7 @@ export async function generateMetadata({
       card: "summary_large_image",
       title,
       description,
-      images: [arrival.imageUrl],
+      images: [arrival.ogImageUrl],
     },
   };
 }

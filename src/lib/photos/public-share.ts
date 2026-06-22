@@ -19,8 +19,10 @@ export type PublicShareArrival = {
   city: string;
   country: string;
   deliveredAt: string;
+  imagePath: string;
   imageUrl: string;
   matchId: string;
+  ogImageUrl: string;
   shareUrl: string;
 };
 
@@ -78,8 +80,10 @@ export const getPublicShareArrival = cache(
       city: data.photos.city_name ?? "Somewhere",
       country: data.photos.country_name ?? "Unknown country",
       deliveredAt: data.delivered_at,
+      imagePath,
       imageUrl: signedImage.signedUrl,
       matchId: data.id,
+      ogImageUrl: `${getPublicAppUrl()}/api/og/share/${data.id}`,
       shareUrl: `${getPublicAppUrl()}/share/${data.id}`,
     };
   },
