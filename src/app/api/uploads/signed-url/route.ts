@@ -4,7 +4,11 @@ import { z } from "zod";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { getSupabaseConfig } from "@/lib/env";
 import { jsonError, validationError } from "@/lib/http";
+import { getRequestIpHash } from "@/lib/moderation/ip";
 import { createServiceSupabaseClient } from "@/lib/supabase/server";
+import { assertInboxHasSpace, inboxFullMessage } from "@/lib/where/entitlements";
+
+export const runtime = "nodejs";
 
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 
@@ -47,9 +51,36 @@ export async function POST(request: NextRequest) {
       return jsonError("Authentication required", 401);
     }
 
+    const inboxSpace = await assertInboxHasSpace(user);
+
+    if (!inboxSpace.hasSpace) {
+      return jsonError(inboxFullMessage(inboxSpace.inboxLimit), 409);
+    }
+
     const body = signedUploadSchema.parse(await request.json());
     const supabase = createServiceSupabaseClient();
     const { photoBucket } = getSupabaseConfig();
+    const uploaderIpHash = getRequestIpHash(request);
+
+    if (uploaderIpHash) {
+      const { data: bannedIp, error: bannedIpError } = await supabase
+        .from("banned_ip_hashes")
+        .select("ip_hash, expires_at")
+        .eq("ip_hash", uploaderIpHash)
+        .maybeSingle();
+
+      if (bannedIpError) {
+        return jsonError(bannedIpError.message, 500);
+      }
+
+      if (
+        bannedIp &&
+        (!bannedIp.expires_at || new Date(bannedIp.expires_at) > new Date())
+      ) {
+        return jsonError("This network is blocked from uploading photos.", 403);
+      }
+    }
+
     const photoId = crypto.randomUUID();
     const extension = extensionForContentType(body.contentType);
     const storagePath = `incoming/${user.id}/${photoId}.${extension}`;
@@ -70,6 +101,8 @@ export async function POST(request: NextRequest) {
       display_lat: body.displayLat ?? null,
       display_lng: body.displayLng ?? null,
       accuracy_m: body.accuracyM ?? null,
+      uploader_ip_hash: uploaderIpHash,
+      uploader_user_agent: request.headers.get("user-agent"),
     });
 
     if (insertError) {

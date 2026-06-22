@@ -53,6 +53,7 @@ create table if not exists public.photos (
   storage_bucket text not null default 'photos',
   original_path text not null,
   processed_path text,
+  thumbnail_path text,
   status photo_status not null default 'awaiting_upload',
   content_type text not null,
   byte_size integer not null check (byte_size > 0),
@@ -78,6 +79,7 @@ create table if not exists public.photo_matches (
   delivered_at timestamptz not null default now(),
   opened_at timestamptz,
   reported_at timestamptz,
+  receiver_deleted_at timestamptz,
   constraint no_self_match check (sender_id <> receiver_id)
 );
 
@@ -92,7 +94,9 @@ create table if not exists public.where_spends (
   tx_signature text unique,
   status spend_status not null default 'quote',
   created_at timestamptz not null default now(),
-  confirmed_at timestamptz
+  confirmed_at timestamptz,
+  utility_target_match_id uuid references public.photo_matches(id) on delete set null,
+  applied_at timestamptz
 );
 
 create index if not exists photos_owner_created_idx
@@ -103,7 +107,8 @@ create index if not exists photos_ready_country_city_idx
   where status = 'ready';
 
 create index if not exists photo_matches_receiver_idx
-  on public.photo_matches(receiver_id, delivered_at desc);
+  on public.photo_matches(receiver_id, delivered_at desc)
+  where receiver_deleted_at is null;
 
 create index if not exists where_spends_user_created_idx
   on public.where_spends(user_id, created_at desc);
@@ -143,6 +148,7 @@ create policy "Receivers can view matched photos"
       from public.photo_matches matches
       where matches.photo_id = photos.id
         and matches.receiver_id = auth.uid()
+        and matches.receiver_deleted_at is null
     )
   );
 
@@ -160,7 +166,10 @@ create policy "Users can update own pending photos"
 drop policy if exists "Users can view received matches" on public.photo_matches;
 create policy "Users can view received matches"
   on public.photo_matches for select
-  using (auth.uid() = receiver_id or auth.uid() = sender_id);
+  using (
+    (auth.uid() = receiver_id and receiver_deleted_at is null)
+    or auth.uid() = sender_id
+  );
 
 drop policy if exists "Users can view own spends" on public.where_spends;
 create policy "Users can view own spends"

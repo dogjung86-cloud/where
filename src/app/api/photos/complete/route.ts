@@ -5,7 +5,12 @@ import { z } from "zod";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { getSupabaseConfig } from "@/lib/env";
 import { jsonError, validationError } from "@/lib/http";
+import {
+  claimArrivalForReceiver,
+  type ClaimedArrival,
+} from "@/lib/photos/arrivals";
 import { createServiceSupabaseClient } from "@/lib/supabase/server";
+import { assertInboxHasSpace, inboxFullMessage } from "@/lib/where/entitlements";
 
 export const runtime = "nodejs";
 
@@ -19,6 +24,12 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return jsonError("Authentication required", 401);
+    }
+
+    const inboxSpace = await assertInboxHasSpace(user);
+
+    if (!inboxSpace.hasSpace) {
+      return jsonError(inboxFullMessage(inboxSpace.inboxLimit), 409);
     }
 
     const body = completeUploadSchema.parse(await request.json());
@@ -59,8 +70,9 @@ export async function POST(request: NextRequest) {
     }
 
     const inputBuffer = Buffer.from(await originalFile.arrayBuffer());
-    const processedBuffer = await sharp(inputBuffer, { failOn: "none" })
-      .rotate()
+    const normalizedImage = sharp(inputBuffer, { failOn: "none" }).rotate();
+    const processedBuffer = await normalizedImage
+      .clone()
       .resize({
         width: 1600,
         height: 1600,
@@ -69,8 +81,19 @@ export async function POST(request: NextRequest) {
       })
       .webp({ quality: 78 })
       .toBuffer();
+    const thumbnailBuffer = await normalizedImage
+      .clone()
+      .resize({
+        width: 400,
+        height: 400,
+        fit: "cover",
+        withoutEnlargement: true,
+      })
+      .webp({ quality: 72 })
+      .toBuffer();
 
     const processedPath = `processed/${user.id}/${photo.id}.webp`;
+    const thumbnailPath = `thumbs/${user.id}/${photo.id}.webp`;
     const { error: uploadError } = await supabase.storage
       .from(photoBucket)
       .upload(processedPath, processedBuffer, {
@@ -88,10 +111,28 @@ export async function POST(request: NextRequest) {
       return jsonError(uploadError.message, 500);
     }
 
+    const { error: thumbnailUploadError } = await supabase.storage
+      .from(photoBucket)
+      .upload(thumbnailPath, thumbnailBuffer, {
+        cacheControl: "31536000",
+        contentType: "image/webp",
+        upsert: true,
+      });
+
+    if (thumbnailUploadError) {
+      await supabase
+        .from("photos")
+        .update({ status: "rejected" })
+        .eq("id", photo.id);
+
+      return jsonError(thumbnailUploadError.message, 500);
+    }
+
     const { error: updateError } = await supabase
       .from("photos")
       .update({
         processed_path: processedPath,
+        thumbnail_path: thumbnailPath,
         status: "ready",
         processed_at: new Date().toISOString(),
       })
@@ -101,10 +142,47 @@ export async function POST(request: NextRequest) {
       return jsonError(updateError.message, 500);
     }
 
+    const arrivals: ClaimedArrival[] = [];
+    const remainingInboxSpace = Math.max(
+      0,
+      inboxSpace.inboxLimit - inboxSpace.inboxCount,
+    );
+    const arrivalsToClaim = Math.min(
+      inboxSpace.receiveCount,
+      remainingInboxSpace,
+    );
+
+    try {
+      for (let index = 0; index < arrivalsToClaim; index += 1) {
+        const claimedArrival = await claimArrivalForReceiver(
+          supabase,
+          photoBucket,
+          user.id,
+        );
+
+        if (!claimedArrival) {
+          break;
+        }
+
+        arrivals.push(claimedArrival);
+      }
+    } catch (arrivalError) {
+      console.error("Unable to claim arrival", arrivalError);
+    }
+    const arrival = arrivals[0] ?? null;
+
     return NextResponse.json({
       photoId: photo.id,
       processedPath,
+      thumbnailPath,
       status: "ready",
+      arrival,
+      arrivals,
+      arrivalStatus: arrivals.length ? "delivered" : "queued",
+      inbox: {
+        limit: inboxSpace.inboxLimit,
+        remainingBeforeClaim: remainingInboxSpace,
+      },
     });
   } catch (error) {
     return validationError(error);

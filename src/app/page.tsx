@@ -4,16 +4,17 @@ import {
   CircleDollarSign,
   Coins,
   Globe2,
-  ImagePlus,
   Images,
   MapPin,
-  RefreshCcw,
   Send,
   ShieldCheck,
   Stamp,
-  Wallet,
 } from "lucide-react";
 
+import { ArrivedMomentsSection } from "@/components/arrived-moments-section";
+import { AuthActions } from "@/components/auth-actions";
+import { LocationMapCard } from "@/components/location-map-card";
+import { PhotoUploadPanel } from "@/components/photo-upload-panel";
 import { WHERE_TIERS, WHERE_UTILITY_PRICES } from "@/lib/where/tiers";
 
 const receivedMoments = [
@@ -72,18 +73,72 @@ const receivedMoments = [
     image: "/samples/sample-23.webp",
   },
   {
-    city: "Osaka",
-    country: "Japan",
+    city: "Mendoza",
+    country: "Argentina",
     time: "4 hr ago",
-    image: "/samples/sample-04.webp",
-  },
-  {
-    city: "Vienna",
-    country: "Austria",
-    time: "4 hr ago",
-    image: "/samples/sample-24.webp",
+    image: "/samples/campfire-night.webp",
   },
 ];
+
+const cityMapPoints: Record<
+  string,
+  {
+    detailMap: string;
+    map: string;
+    region: string;
+  }
+> = {
+  Seoul: {
+    detailMap: "/maps/simple/seoul.svg",
+    map: "/maps/simple/seoul.svg",
+    region: "East Asia",
+  },
+  Madrid: {
+    detailMap: "/maps/simple/madrid.svg",
+    map: "/maps/simple/madrid.svg",
+    region: "Iberia",
+  },
+  Portland: {
+    detailMap: "/maps/simple/portland.svg",
+    map: "/maps/simple/portland.svg",
+    region: "Pacific NW",
+  },
+  Reykjavik: {
+    detailMap: "/maps/simple/reykjavik.svg",
+    map: "/maps/simple/reykjavik.svg",
+    region: "North Atlantic",
+  },
+  Krakow: {
+    detailMap: "/maps/simple/krakow.svg",
+    map: "/maps/simple/krakow.svg",
+    region: "Central Europe",
+  },
+  Dublin: {
+    detailMap: "/maps/simple/dublin.svg",
+    map: "/maps/simple/dublin.svg",
+    region: "Ireland",
+  },
+  "Buenos Aires": {
+    detailMap: "/maps/simple/buenos-aires.svg",
+    map: "/maps/simple/buenos-aires.svg",
+    region: "Rio de la Plata",
+  },
+  Busan: {
+    detailMap: "/maps/simple/busan.svg",
+    map: "/maps/simple/busan.svg",
+    region: "Korea Strait",
+  },
+  Prague: {
+    detailMap: "/maps/simple/prague.svg",
+    map: "/maps/simple/prague.svg",
+    region: "Bohemia",
+  },
+  Mendoza: {
+    detailMap: "/maps/simple/mendoza.svg",
+    map: "/maps/simple/mendoza.svg",
+    region: "Andes foothills",
+  },
+};
 
 const cityLog = [
   ["Tokyo", "Japan"],
@@ -92,6 +147,57 @@ const cityLog = [
   ["Sao Paulo", "Brazil"],
   ["Copenhagen", "Denmark"],
   ["Marrakesh", "Morocco"],
+];
+
+const inventoryStats = [
+  {
+    label: "Inbox",
+    value: "12",
+    detail: "arrived after sending photos",
+    icon: Images,
+  },
+  {
+    label: "Sent",
+    value: "4",
+    detail: "accepted into the exchange",
+    icon: Send,
+  },
+  {
+    label: "Vault",
+    value: "7",
+    detail: "saved as permanent inventory",
+    icon: Archive,
+  },
+  {
+    label: "Cities",
+    value: "9",
+    detail: "collected in your passport",
+    icon: Globe2,
+  },
+];
+
+const inventoryItems = [
+  {
+    label: "Sent photo",
+    city: "Seoul",
+    country: "South Korea",
+    status: "Ready",
+    image: "/samples/sample-01.webp",
+  },
+  {
+    label: "New arrival",
+    city: "Madrid",
+    country: "Spain",
+    status: "Inbox",
+    image: "/samples/sample-11.webp",
+  },
+  {
+    label: "Saved moment",
+    city: "Buenos Aires",
+    country: "Argentina",
+    status: "Vault",
+    image: "/samples/sample-03.webp",
+  },
 ];
 
 const exchangeRules = [
@@ -112,19 +218,59 @@ const exchangeRules = [
   },
 ];
 
-const vaultUtilities = WHERE_UTILITY_PRICES.filter((utility) =>
-  utility.key.startsWith("vault_"),
-);
+function getCityMapPoint(city: string, country: string) {
+  return (
+    cityMapPoints[city] ?? {
+      detailMap: "/maps/simple/buenos-aires.svg",
+      map: "/maps/simple/buenos-aires.svg",
+      region: country,
+    }
+  );
+}
 
-const momentUtilities = WHERE_UTILITY_PRICES.filter(
-  (utility) => !utility.key.startsWith("vault_"),
-);
+function InventoryPhotoCards({ className = "" }: { className?: string }) {
+  return (
+    <div className={`grid grid-cols-1 gap-3 sm:grid-cols-3 ${className}`}>
+      {inventoryItems.map((item) => {
+        const mapPoint = getCityMapPoint(item.city, item.country);
+
+        return (
+          <article
+            className="overflow-hidden rounded-lg border border-[#e2dbd0] bg-[#f7f3ec]"
+            key={`${item.label}-${item.city}`}
+          >
+            <div
+              aria-label={`${item.label}: ${item.city}, ${item.country}`}
+              className="aspect-[4/5] bg-cover bg-center"
+              style={{ backgroundImage: `url(${item.image})` }}
+            />
+            <div className="p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold">{item.label}</p>
+                <span className="rounded-lg bg-white px-2 py-1 text-xs font-semibold text-[#0d6b4f]">
+                  {item.status}
+                </span>
+              </div>
+              <LocationMapCard
+                city={item.city}
+                country={item.country}
+                detailMap={mapPoint.detailMap}
+                map={mapPoint.map}
+                region={mapPoint.region}
+              />
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function Home() {
   return (
     <main className="min-h-screen bg-[#f7f3ec] text-[#171717]">
       <section className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-4 md:px-6">
-        <header className="flex items-center justify-between border-b border-[#d8d0c2] pb-4">
+        <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[#d8d0c2] pb-4">
           <div className="flex items-center gap-3">
             <div className="grid size-10 place-items-center rounded-lg bg-[#171717] text-white">
               <MapPin size={20} strokeWidth={2} />
@@ -136,52 +282,46 @@ export default function Home() {
               </p>
             </div>
           </div>
-          <button className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#171717] bg-[#171717] px-3 text-sm font-semibold text-white">
-            <Wallet size={17} strokeWidth={2} />
-            Connect
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <a
+              aria-label="SomeWhere on X"
+              className="grid size-10 place-items-center rounded-lg border border-[#d8d0c2] bg-white text-sm font-black text-[#171717] transition hover:border-[#171717]"
+              href="https://x.com/SomeWheredev"
+              rel="noreferrer"
+              target="_blank"
+              title="X"
+            >
+              X
+            </a>
+            <a
+              aria-label="SomeWhere on Telegram"
+              className="grid size-10 place-items-center rounded-lg border border-[#d8d0c2] bg-white text-[#171717] transition hover:border-[#171717]"
+              href="https://t.me/somewherewall"
+              rel="noreferrer"
+              target="_blank"
+              title="Telegram"
+            >
+              <Send size={17} strokeWidth={2} />
+            </a>
+            <AuthActions compact />
+          </div>
         </header>
 
         <section className="grid min-h-[calc(100vh-7rem)] grid-cols-1 gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-          <div className="flex flex-col justify-between gap-6">
+          <div className="flex flex-col gap-6">
             <div>
               <p className="mb-3 inline-flex rounded-lg bg-[#17231f] px-3 py-2 text-sm font-semibold text-white">
-                Private world photo exchange
+                Photo-first world exchange
               </p>
               <h1 className="max-w-3xl text-5xl font-semibold leading-[0.95] text-[#171717] sm:text-6xl md:text-7xl">
                 SomeWhere
               </h1>
               <p className="mt-5 max-w-2xl text-lg leading-8 text-[#5f574f]">
-                Send one real photo from your day and receive a stranger&apos;s
-                moment from another city. No feed, no followers, no score. Just
+                Send one real photo from your day and build an inventory of
+                moments from other cities. No feed, no followers, no score. Just
                 a quiet little trade with someone, somewhere.
               </p>
             </div>
-
-            <section className="rounded-lg border border-[#d8d0c2] bg-white p-4 lg:hidden">
-              <p className="text-sm font-medium text-[#776e62]">$WHERE</p>
-              <h2 className="text-xl font-semibold">
-                Hold tokens, receive more photos
-              </h2>
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <div className="rounded-lg bg-[#f7f3ec] p-3">
-                  <p className="text-sm font-semibold">Free</p>
-                  <p className="mt-1 text-2xl font-semibold">1</p>
-                  <p className="text-xs text-[#776e62]">send 1, receive 1</p>
-                </div>
-                {WHERE_TIERS.map((tier) => (
-                  <div className="rounded-lg bg-[#f7f3ec] p-3" key={tier.name}>
-                    <p className="text-sm font-semibold">{tier.name}</p>
-                    <p className="mt-1 text-2xl font-semibold">
-                      {tier.receiveCount}
-                    </p>
-                    <p className="text-xs text-[#0d6b4f]">
-                      Hold {tier.requiredBalance.toLocaleString()} $WHERE
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </section>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               {exchangeRules.map((rule) => {
@@ -202,81 +342,80 @@ export default function Home() {
               })}
             </div>
 
-            <div className="rounded-lg border border-[#d8d0c2] bg-[#fffaf1] p-5">
-              <div className="mb-5 flex items-center justify-between">
+            <PhotoUploadPanel />
+
+            <section className="rounded-lg border border-[#d8d0c2] bg-white p-4 lg:hidden">
+              <div className="mb-4 flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-[#776e62]">Exchange</p>
-                  <h2 className="text-2xl font-semibold">Send one moment</h2>
+                  <p className="text-sm font-medium text-[#776e62]">
+                    Your inventory
+                  </p>
+                  <h2 className="text-xl font-semibold">
+                    Photos you sent and received
+                  </h2>
                 </div>
-                <ImagePlus size={24} strokeWidth={1.8} />
+                <Images size={22} strokeWidth={1.8} />
               </div>
 
-              <label className="flex min-h-64 cursor-pointer flex-col items-center justify-center gap-4 rounded-lg border border-dashed border-[#b9ad9b] bg-white text-center">
-                <span className="grid size-14 place-items-center rounded-lg bg-[#e2f4ee] text-[#0d6b4f]">
-                  <ImagePlus size={27} strokeWidth={1.8} />
-                </span>
-                <span className="max-w-[16rem] text-base font-semibold">
-                  Drop a current photo to open your next arrival
-                </span>
-                <input className="sr-only" type="file" accept="image/*" />
-              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {inventoryStats.map((item) => {
+                  const Icon = item.icon;
 
-              <p className="mt-3 rounded-lg bg-[#171717] px-3 py-2 text-sm font-medium text-white">
-                Extra arrivals unlock only after your own photo lands.
-              </p>
-            </div>
+                  return (
+                    <article className="rounded-lg bg-[#f7f3ec] p-3" key={item.label}>
+                      <Icon className="mb-2 text-[#0d6b4f]" size={18} />
+                      <p className="text-sm font-semibold">{item.label}</p>
+                      <p className="mt-1 text-2xl font-semibold">{item.value}</p>
+                      <p className="text-xs leading-5 text-[#776e62]">
+                        {item.detail}
+                      </p>
+                    </article>
+                  );
+                })}
+              </div>
+
+              <InventoryPhotoCards className="mt-3" />
+            </section>
+
           </div>
 
-          <div className="grid content-start gap-4">
+          <div className="hidden content-start gap-4 lg:grid">
             <section className="rounded-lg border border-[#d8d0c2] bg-white p-5">
               <div className="mb-5 flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-sm font-medium text-[#776e62]">$WHERE</p>
+                  <p className="text-sm font-medium text-[#776e62]">
+                    Your inventory
+                  </p>
                   <h2 className="text-2xl font-semibold">
-                    Hold tokens, receive more photos
+                    Photos you sent and received
                   </h2>
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-[#776e62]">
-                    The free loop stays simple: send 1 photo, receive 1 photo.
-                    Holding $WHERE increases how many arrivals open after your
-                    photo is accepted into the exchange queue.
+                    The main account view starts with the things a sender owns:
+                    photos waiting in the inbox, saved vault moments, and the
+                    city passport built from real exchanges.
                   </p>
                 </div>
-                <Coins size={25} strokeWidth={1.8} />
+                <Images size={25} strokeWidth={1.8} />
               </div>
 
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-                <article className="rounded-lg bg-[#f7f3ec] p-4">
-                  <p className="text-sm font-semibold">Free</p>
-                  <p className="mt-2 text-3xl font-semibold">1</p>
-                  <p className="mt-1 text-sm text-[#776e62]">
-                    arrival after sending 1 photo
-                  </p>
-                  <p className="mt-3 text-xs leading-5 text-[#776e62]">
-                    Temporary inbox only. Permanent saves use vault space.
-                  </p>
-                </article>
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                {inventoryStats.map((item) => {
+                  const Icon = item.icon;
 
-                {WHERE_TIERS.map((tier) => (
-                  <article className="rounded-lg bg-[#f7f3ec] p-4" key={tier.name}>
-                    <p className="text-sm font-semibold">{tier.name}</p>
-                    <p className="mt-2 text-3xl font-semibold">
-                      {tier.receiveCount}
-                    </p>
-                    <p className="mt-1 text-sm text-[#776e62]">
-                      arrivals per accepted photo
-                    </p>
-                    <p className="mt-3 text-xs font-semibold text-[#0d6b4f]">
-                      Hold {tier.requiredBalance.toLocaleString()} $WHERE
-                    </p>
-                    <p className="mt-2 text-xs leading-5 text-[#776e62]">
-                      {tier.detail}
-                    </p>
-                    <p className="mt-2 text-xs leading-5 text-[#776e62]">
-                      Includes {tier.vaultSlots} permanent vault slots.
-                    </p>
-                  </article>
-                ))}
+                  return (
+                    <article className="rounded-lg bg-[#f7f3ec] p-4" key={item.label}>
+                      <Icon className="mb-3 text-[#0d6b4f]" size={20} />
+                      <p className="text-sm font-semibold">{item.label}</p>
+                      <p className="mt-2 text-3xl font-semibold">{item.value}</p>
+                      <p className="mt-1 text-xs leading-5 text-[#776e62]">
+                        {item.detail}
+                      </p>
+                    </article>
+                  );
+                })}
               </div>
+
+              <InventoryPhotoCards className="mt-4" />
             </section>
 
             <section className="grid grid-cols-1 gap-4 md:grid-cols-[0.9fr_1.1fr]">
@@ -293,21 +432,18 @@ export default function Home() {
                   <Archive size={24} strokeWidth={1.8} />
                 </div>
                 <p className="text-sm leading-6 text-[#cfe1d8]">
-                  Received photos are tiny artifacts from strangers. $WHERE
-                  lets collectors expand a permanent vault, so favorite arrivals
-                  can become a real inventory instead of disappearing from the
-                  temporary inbox.
+                  Received photos are tiny artifacts from strangers. Favorite
+                  arrivals can become a real inventory instead of disappearing
+                  from the temporary inbox.
                 </p>
                 <div className="mt-5 grid grid-cols-2 gap-2">
-                  {vaultUtilities.map((utility) => (
+                  {["Inbox", "Vault", "Passport", "New city"].map((label) => (
                     <div
                       className="rounded-lg border border-white/10 bg-white/[0.08] p-3"
-                      key={utility.key}
+                      key={label}
                     >
-                      <p className="text-sm font-semibold">{utility.label}</p>
-                      <p className="mt-1 text-xs text-[#b9d3c8]">
-                        {utility.cost.toLocaleString()} $WHERE
-                      </p>
+                      <p className="text-sm font-semibold">{label}</p>
+                      <p className="mt-1 text-xs text-[#b9d3c8]">Private</p>
                     </div>
                   ))}
                 </div>
@@ -317,29 +453,22 @@ export default function Home() {
                 <div className="mb-4 flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-[#776e62]">
-                      Token Utility
+                      Passport
                     </p>
                     <h2 className="text-2xl font-semibold">
-                      What $WHERE unlocks
+                      Collected cities
                     </h2>
                   </div>
-                  <CircleDollarSign size={24} strokeWidth={1.8} />
+                  <Globe2 size={24} strokeWidth={1.8} />
                 </div>
-                <div className="space-y-3">
-                  {momentUtilities.map((utility) => (
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-2">
+                  {cityLog.map(([city, country]) => (
                     <div
-                      className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-b border-[#e2dbd0] pb-3 last:border-b-0 last:pb-0"
-                      key={utility.key}
+                      className="min-w-0 rounded-lg bg-[#f7f3ec] p-3"
+                      key={`${city}-${country}`}
                     >
-                      <div>
-                        <p className="text-sm font-semibold">{utility.label}</p>
-                        <p className="mt-1 text-xs leading-5 text-[#776e62]">
-                          {utility.detail}
-                        </p>
-                      </div>
-                      <span className="text-sm font-semibold">
-                        {utility.cost.toLocaleString()}
-                      </span>
+                      <p className="text-sm font-semibold leading-4">{city}</p>
+                      <p className="text-xs text-[#776e62]">{country}</p>
                     </div>
                   ))}
                 </div>
@@ -349,42 +478,18 @@ export default function Home() {
         </section>
 
         <section className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_0.58fr]">
-          <div className="rounded-lg border border-[#d8d0c2] bg-white p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-[#776e62]">Inbox</p>
-                <h2 className="text-2xl font-semibold">Arrived moments</h2>
-                <p className="mt-1 text-sm text-[#776e62]">
-                  Shy selfies, travel snaps, family moments, and quiet ordinary
-                  days from other cities.
-                </p>
-              </div>
-              <button className="grid size-10 place-items-center rounded-lg border border-[#d8d0c2] text-[#171717]">
-                <RefreshCcw size={17} strokeWidth={2} />
-              </button>
-            </div>
+          <ArrivedMomentsSection
+            moments={receivedMoments.map((moment) => {
+              const mapPoint = getCityMapPoint(moment.city, moment.country);
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {receivedMoments.map((moment) => (
-                <article
-                  className="overflow-hidden rounded-lg border border-[#e2dbd0] bg-[#f7f3ec]"
-                  key={`${moment.city}-${moment.country}`}
-                >
-                  <div
-                    aria-label={`${moment.city}, ${moment.country}`}
-                    className="aspect-[4/5] bg-cover bg-center"
-                    style={{ backgroundImage: `url(${moment.image})` }}
-                  />
-                  <div className="p-3">
-                    <p className="text-sm font-semibold">{moment.city}</p>
-                    <p className="text-xs text-[#776e62]">
-                      {moment.country} - {moment.time}
-                    </p>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </div>
+              return {
+                ...moment,
+                detailMap: mapPoint.detailMap,
+                map: mapPoint.map,
+                region: mapPoint.region,
+              };
+            })}
+          />
 
           <div className="grid gap-4">
             <section className="rounded-lg border border-[#d8d0c2] bg-[#17231f] p-5 text-white">
@@ -422,6 +527,90 @@ export default function Home() {
           </div>
         </section>
 
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_0.8fr]">
+          <section className="rounded-lg border border-[#d8d0c2] bg-white p-5">
+            <div className="mb-5 flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-[#776e62]">$WHERE</p>
+                <h2 className="text-2xl font-semibold">
+                  Token support comes after the photo loop
+                </h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-[#776e62]">
+                  The free loop stays simple: send 1 photo, receive 1 photo.
+                  The default inbox holds 10 arrivals. Holding $WHERE can
+                  increase both arrivals per accepted photo and your inbox
+                  capacity.
+                </p>
+              </div>
+              <Coins size={25} strokeWidth={1.8} />
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+              <article className="rounded-lg bg-[#f7f3ec] p-4">
+                <p className="text-sm font-semibold">Free</p>
+                <p className="mt-2 text-3xl font-semibold">1</p>
+                <p className="mt-1 text-sm text-[#776e62]">
+                  arrival after sending 1 photo
+                </p>
+                <p className="mt-3 text-xs leading-5 text-[#776e62]">
+                  Default inbox limit is 10 arrivals.
+                </p>
+              </article>
+
+              {WHERE_TIERS.map((tier) => (
+                <article className="rounded-lg bg-[#f7f3ec] p-4" key={tier.name}>
+                  <p className="text-sm font-semibold">{tier.name}</p>
+                  <p className="mt-2 text-3xl font-semibold">
+                    {tier.receiveCount}
+                  </p>
+                  <p className="mt-1 text-sm text-[#776e62]">
+                    arrivals per accepted photo
+                  </p>
+                  <p className="mt-3 text-xs font-semibold text-[#0d6b4f]">
+                    Hold {tier.requiredBalance.toLocaleString()} $WHERE
+                  </p>
+                  <p className="mt-2 text-xs leading-5 text-[#776e62]">
+                    {tier.detail}
+                  </p>
+                  <p className="mt-2 text-xs leading-5 text-[#776e62]">
+                    Inbox limit: {tier.inboxLimit.toLocaleString()} arrivals.
+                  </p>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-[#d8d0c2] bg-[#fffaf1] p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-[#776e62]">
+                  $WHERE Actions
+                </p>
+                <h2 className="text-2xl font-semibold">One-time $WHERE uses</h2>
+              </div>
+              <CircleDollarSign size={24} strokeWidth={1.8} />
+            </div>
+            <div className="space-y-3">
+              {WHERE_UTILITY_PRICES.map((utility) => (
+                <div
+                  className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-b border-[#e2dbd0] pb-3 last:border-b-0 last:pb-0"
+                  key={utility.key}
+                >
+                  <div>
+                    <p className="text-sm font-semibold">{utility.label}</p>
+                    <p className="mt-1 text-xs leading-5 text-[#776e62]">
+                      {utility.detail}
+                    </p>
+                  </div>
+                  <span className="text-sm font-semibold">
+                    {utility.cost.toLocaleString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+        </section>
+
         <section className="rounded-lg bg-[#171717] p-5 text-white">
           <div className="flex items-center justify-between border-b border-white/10 pb-4">
             <div>
@@ -437,18 +626,14 @@ export default function Home() {
                 <Stamp size={21} strokeWidth={1.8} />
                 <h3 className="text-lg font-semibold">Token spend split</h3>
               </div>
-              <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="grid grid-cols-2 gap-2 text-center">
                 <div className="rounded-lg bg-[#f7f3ec] p-3">
-                  <p className="text-xl font-semibold">60%</p>
+                  <p className="text-xl font-semibold">50%</p>
                   <p className="text-xs text-[#776e62]">burn</p>
                 </div>
                 <div className="rounded-lg bg-[#f7f3ec] p-3">
-                  <p className="text-xl font-semibold">30%</p>
+                  <p className="text-xl font-semibold">50%</p>
                   <p className="text-xs text-[#776e62]">treasury</p>
-                </div>
-                <div className="rounded-lg bg-[#f7f3ec] p-3">
-                  <p className="text-xl font-semibold">10%</p>
-                  <p className="text-xs text-[#776e62]">rewards</p>
                 </div>
               </div>
             </section>
