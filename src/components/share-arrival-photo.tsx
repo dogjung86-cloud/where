@@ -145,19 +145,27 @@ export function ShareArrivalPhoto({
       `I received a moment from ${city}, ${country} on SomeWhere. Send one photo, receive somewhere. $WHERE ${SITE_URL}`,
     [city, country],
   );
+  const xCaption = useMemo(
+    () =>
+      `I received a moment from ${city}, ${country} on SomeWhere. Send one photo, receive somewhere. $WHERE`,
+    [city, country],
+  );
   const shareUrl = useMemo(
-    () => (matchId ? `${getOrigin()}/share/${matchId}` : absoluteUrl(image)),
+    () =>
+      matchId
+        ? new URL(`/share/${matchId}`, SITE_URL).toString()
+        : absoluteUrl(image),
     [image, matchId],
   );
 
   const xShareUrl = useMemo(() => {
     const params = new URLSearchParams({
-      text: caption,
+      text: xCaption,
       url: shareUrl,
     });
 
     return `https://x.com/intent/post?${params.toString()}`;
-  }, [caption, shareUrl]);
+  }, [shareUrl, xCaption]);
 
   async function copyShareText() {
     await navigator.clipboard.writeText(caption);
@@ -186,7 +194,7 @@ export function ShareArrivalPhoto({
     setStatus(null);
     window.open(xShareUrl, "_blank", "noopener,noreferrer");
     await recordShareEvent("x");
-    setStatus("X compose opened with the share text and arrival link.");
+    setStatus("X compose opened with the photo card link.");
   }
 
   async function openInstagramShare() {
