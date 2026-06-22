@@ -1,11 +1,9 @@
+import { cleanAsciiEnvValue, cleanEnvValue } from "@/lib/env-clean";
+
 const DEFAULT_WHERE_TREASURY_WALLET =
   "9DpeHu3QSr3tkr4Mr6sLiriXKnUpDhgzh7tBg3FcZxBr";
 const DEFAULT_SOLANA_RPC_URL =
   "https://mainnet.helius-rpc.com/?api-key=b5e995b9-0436-4ae6-b4d8-8f7fc4798f13";
-
-function cleanEnvValue(value: string) {
-  return value.replace(/^\uFEFF/, "").trim();
-}
 
 export function getRequiredEnv(name: string) {
   const value = process.env[name];
@@ -25,9 +23,11 @@ export function getOptionalEnv(name: string, fallback = "") {
 
 export function getSupabaseConfig() {
   return {
-    url: getRequiredEnv("NEXT_PUBLIC_SUPABASE_URL"),
-    anonKey: getRequiredEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
-    serviceRoleKey: getRequiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
+    url: cleanAsciiEnvValue(getRequiredEnv("NEXT_PUBLIC_SUPABASE_URL")),
+    anonKey: cleanAsciiEnvValue(getRequiredEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY")),
+    serviceRoleKey: cleanAsciiEnvValue(
+      getRequiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
+    ),
     photoBucket: getOptionalEnv("SUPABASE_PHOTO_BUCKET", "photos"),
   };
 }
