@@ -109,6 +109,8 @@ export async function claimArrivalForReceiver(
     .neq("owner_id", receiverId)
     .gt("expires_at", new Date().toISOString())
     .not("processed_path", "is", null)
+    .not("city_name", "is", null)
+    .not("country_name", "is", null)
     .order("created_at", { ascending: true })
     .limit(32)
     .returns<ArrivalCandidate[]>();

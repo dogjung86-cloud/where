@@ -3,7 +3,10 @@ import { z } from "zod";
 
 import { getAuthenticatedUser } from "@/lib/auth";
 import { getSupabaseConfig } from "@/lib/env";
-import { getRequestPhotoLocation } from "@/lib/geoip";
+import {
+  getRequestPhotoLocation,
+  getReverseGeocodedPhotoLocation,
+} from "@/lib/geoip";
 import { jsonError, validationError } from "@/lib/http";
 import { getRequestIpHash } from "@/lib/moderation/ip";
 import { createServiceSupabaseClient } from "@/lib/supabase/server";
@@ -68,21 +71,61 @@ export async function POST(request: NextRequest) {
     const supabase = createServiceSupabaseClient();
     const { photoBucket } = getSupabaseConfig();
     const uploaderIpHash = getRequestIpHash(request);
+    const browserLocation =
+      body.locationSource === "browser_gps" &&
+      body.displayLat !== undefined &&
+      body.displayLng !== undefined &&
+      (!body.cityName || !body.countryName)
+        ? await getReverseGeocodedPhotoLocation({
+            accuracyM: body.accuracyM ?? null,
+            latitude: body.displayLat,
+            longitude: body.displayLng,
+          })
+        : null;
     const requestLocation =
-      body.cityName || body.countryName
+      browserLocation || body.cityName || body.countryName
         ? null
         : await getRequestPhotoLocation(request);
-    const cityName = body.cityName ?? requestLocation?.cityName ?? null;
-    const regionName = body.regionName ?? requestLocation?.regionName ?? null;
+    const cityName =
+      body.cityName ??
+      browserLocation?.cityName ??
+      requestLocation?.cityName ??
+      null;
+    const regionName =
+      body.regionName ??
+      browserLocation?.regionName ??
+      requestLocation?.regionName ??
+      null;
     const countryCode =
-      body.countryCode ?? requestLocation?.countryCode ?? null;
+      body.countryCode ??
+      browserLocation?.countryCode ??
+      requestLocation?.countryCode ??
+      null;
     const countryName =
-      body.countryName ?? requestLocation?.countryName ?? null;
-    const displayLat = body.displayLat ?? requestLocation?.displayLat ?? null;
-    const displayLng = body.displayLng ?? requestLocation?.displayLng ?? null;
-    const accuracyM = body.accuracyM ?? requestLocation?.accuracyM ?? null;
+      body.countryName ??
+      browserLocation?.countryName ??
+      requestLocation?.countryName ??
+      null;
+    const displayLat =
+      browserLocation?.displayLat ??
+      body.displayLat ??
+      requestLocation?.displayLat ??
+      null;
+    const displayLng =
+      browserLocation?.displayLng ??
+      body.displayLng ??
+      requestLocation?.displayLng ??
+      null;
+    const accuracyM =
+      body.accuracyM ??
+      browserLocation?.accuracyM ??
+      requestLocation?.accuracyM ??
+      null;
     const locationSource =
-      body.locationSource === "ip" && requestLocation ? "ip" : body.locationSource;
+      browserLocation?.locationSource ??
+      (body.locationSource === "ip" && requestLocation
+        ? "ip"
+        : body.locationSource);
 
     if (uploaderIpHash) {
       const { data: bannedIp, error: bannedIpError } = await supabase

@@ -60,3 +60,13 @@ export function getGeoIpConfig() {
     timeoutMs: Number(getOptionalEnv("IP_GEOLOCATION_TIMEOUT_MS", "2500")),
   };
 }
+
+export function getReverseGeocodingConfig() {
+  return {
+    endpoint: getOptionalEnv(
+      "REVERSE_GEOCODING_URL",
+      "https://api.bigdatacloud.net/data/reverse-geocode-client?latitude={lat}&longitude={lng}&localityLanguage=en",
+    ),
+    timeoutMs: Number(getOptionalEnv("REVERSE_GEOCODING_TIMEOUT_MS", "3500")),
+  };
+}

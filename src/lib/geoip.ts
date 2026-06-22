@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 
-import { getGeoIpConfig } from "@/lib/env";
-import { getClientIpAddress } from "@/lib/moderation/ip";
+import { getGeoIpConfig, getReverseGeocodingConfig } from "@/lib/env";
+import { getClientIpAddress, isPrivateIpAddress } from "@/lib/moderation/ip";
 
 export type PhotoLocation = {
   cityName: string | null;
@@ -11,7 +11,7 @@ export type PhotoLocation = {
   displayLat: number | null;
   displayLng: number | null;
   accuracyM: number | null;
-  locationSource: "ip";
+  locationSource: "browser_gps" | "ip";
 };
 
 type IpWhoIsResponse = {
@@ -25,17 +25,19 @@ type IpWhoIsResponse = {
   message?: unknown;
 };
 
-const PRIVATE_IP_PATTERNS = [
-  /^10\./,
-  /^127\./,
-  /^169\.254\./,
-  /^172\.(1[6-9]|2\d|3[0-1])\./,
-  /^192\.168\./,
-  /^::1$/,
-  /^fc/i,
-  /^fd/i,
-  /^fe80:/i,
-];
+type ReverseGeocodeResponse = {
+  city?: unknown;
+  countryCode?: unknown;
+  countryName?: unknown;
+  latitude?: unknown;
+  locality?: unknown;
+  localityInfo?: {
+    administrative?: Array<{ isoCode?: unknown; name?: unknown }>;
+  };
+  longitude?: unknown;
+  principalSubdivision?: unknown;
+  principalSubdivisionCode?: unknown;
+};
 
 function readString(value: unknown) {
   if (typeof value !== "string") {
@@ -62,15 +64,15 @@ function readNumber(value: unknown) {
   return null;
 }
 
-function isPrivateIpAddress(ipAddress: string) {
-  return PRIVATE_IP_PATTERNS.some((pattern) => pattern.test(ipAddress));
-}
-
 function roundCoordinate(value: number | null) {
   if (value === null) {
     return null;
   }
 
+  return Number(value.toFixed(2));
+}
+
+function readRoundedCoordinate(value: number) {
   return Number(value.toFixed(2));
 }
 
@@ -84,13 +86,46 @@ function buildGeoIpUrl(endpoint: string, ipAddress: string) {
   return url.toString();
 }
 
+function buildReverseGeocodingUrl(
+  endpoint: string,
+  latitude: number,
+  longitude: number,
+) {
+  if (endpoint.includes("{lat}") || endpoint.includes("{lng}")) {
+    return endpoint
+      .replace("{lat}", encodeURIComponent(String(latitude)))
+      .replace("{lng}", encodeURIComponent(String(longitude)))
+      .replace("{latitude}", encodeURIComponent(String(latitude)))
+      .replace("{longitude}", encodeURIComponent(String(longitude)));
+  }
+
+  const url = new URL(endpoint);
+  url.searchParams.set("latitude", String(latitude));
+  url.searchParams.set("longitude", String(longitude));
+  return url.toString();
+}
+
+function normalizeCountryName(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value.trim();
+  const countryAliases: Record<string, string> = {
+    "Korea (the Republic of)": "South Korea",
+    "United States of America": "United States",
+  };
+
+  return countryAliases[normalized] ?? normalized;
+}
+
 function normalizeGeoIpPayload(payload: IpWhoIsResponse): PhotoLocation | null {
   if (payload.success === false) {
     return null;
   }
 
   const cityName = readString(payload.city);
-  const countryName = readString(payload.country);
+  const countryName = normalizeCountryName(readString(payload.country));
 
   if (!cityName && !countryName) {
     return null;
@@ -108,6 +143,41 @@ function normalizeGeoIpPayload(payload: IpWhoIsResponse): PhotoLocation | null {
     displayLng: roundCoordinate(longitude),
     locationSource: "ip",
     regionName: readString(payload.region),
+  };
+}
+
+function normalizeReverseGeocodePayload(
+  payload: ReverseGeocodeResponse,
+  latitude: number,
+  longitude: number,
+  accuracyM: number | null,
+): PhotoLocation | null {
+  const administrative = payload.localityInfo?.administrative ?? [];
+  const cityName =
+    readString(payload.city) ??
+    readString(payload.locality) ??
+    readString(payload.principalSubdivision);
+  const countryName = normalizeCountryName(
+    readString(payload.countryName) ??
+      readString(
+        administrative.find((item) => readString(item.isoCode)?.length === 2)
+          ?.name,
+      ),
+  );
+
+  if (!cityName && !countryName) {
+    return null;
+  }
+
+  return {
+    accuracyM,
+    cityName,
+    countryCode: readString(payload.countryCode)?.toUpperCase() ?? null,
+    countryName,
+    displayLat: readRoundedCoordinate(latitude),
+    displayLng: readRoundedCoordinate(longitude),
+    locationSource: "browser_gps",
+    regionName: readString(payload.principalSubdivision),
   };
 }
 
@@ -145,6 +215,68 @@ export async function getRequestPhotoLocation(
     const payload = (await response.json()) as IpWhoIsResponse;
 
     return normalizeGeoIpPayload(payload);
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function getReverseGeocodedPhotoLocation({
+  accuracyM,
+  latitude,
+  longitude,
+}: {
+  accuracyM: number | null;
+  latitude: number;
+  longitude: number;
+}): Promise<PhotoLocation | null> {
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    latitude < -90 ||
+    latitude > 90 ||
+    longitude < -180 ||
+    longitude > 180
+  ) {
+    return null;
+  }
+
+  const { endpoint, timeoutMs } = getReverseGeocodingConfig();
+
+  if (!endpoint) {
+    return null;
+  }
+
+  const roundedLatitude = readRoundedCoordinate(latitude);
+  const roundedLongitude = readRoundedCoordinate(longitude);
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    Number.isFinite(timeoutMs) ? timeoutMs : 3500,
+  );
+
+  try {
+    const response = await fetch(
+      buildReverseGeocodingUrl(endpoint, roundedLatitude, roundedLongitude),
+      {
+        cache: "no-store",
+        signal: controller.signal,
+      },
+    );
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = (await response.json()) as ReverseGeocodeResponse;
+
+    return normalizeReverseGeocodePayload(
+      payload,
+      roundedLatitude,
+      roundedLongitude,
+      accuracyM,
+    );
   } catch {
     return null;
   } finally {

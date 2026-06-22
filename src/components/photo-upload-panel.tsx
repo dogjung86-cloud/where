@@ -44,6 +44,13 @@ type CompleteUploadResponse = {
   arrivals?: ArrivalNotice[];
 };
 
+type UploadLocationPayload = {
+  accuracyM: number;
+  displayLat: number;
+  displayLng: number;
+  locationSource: "browser_gps";
+};
+
 function formatBytes(value: number) {
   if (value < 1024 * 1024) {
     return `${Math.max(1, Math.round(value / 1024))} KB`;
@@ -84,6 +91,38 @@ function getUploadContentType(file: File) {
   }
 
   return null;
+}
+
+function roundCoordinate(value: number) {
+  return Number(value.toFixed(2));
+}
+
+async function getBrowserLocationPayload(): Promise<UploadLocationPayload | null> {
+  if (typeof navigator === "undefined" || !navigator.geolocation) {
+    return null;
+  }
+
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        resolve({
+          accuracyM: Math.min(
+            100_000,
+            Math.max(1, Math.round(position.coords.accuracy || 50_000)),
+          ),
+          displayLat: roundCoordinate(position.coords.latitude),
+          displayLng: roundCoordinate(position.coords.longitude),
+          locationSource: "browser_gps",
+        });
+      },
+      () => resolve(null),
+      {
+        enableHighAccuracy: false,
+        maximumAge: 10 * 60 * 1000,
+        timeout: 4500,
+      },
+    );
+  });
 }
 
 async function readJsonResponse<T>(response: Response): Promise<T> {
@@ -256,6 +295,10 @@ export function PhotoUploadPanel() {
         throw new Error("Please choose a JPEG, PNG, WebP, or HEIC image.");
       }
 
+      setPanelMessage("Finding the approximate city...", "info");
+
+      const locationPayload = await getBrowserLocationPayload();
+
       const signedUploadResponse = await fetch("/api/uploads/signed-url", {
         method: "POST",
         headers: {
@@ -265,6 +308,7 @@ export function PhotoUploadPanel() {
         body: JSON.stringify({
           contentType,
           byteSize: selectedFile.size,
+          ...(locationPayload ?? {}),
         }),
       });
       const signedUpload = await readJsonResponse<SignedUploadResponse>(
