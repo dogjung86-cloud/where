@@ -254,6 +254,7 @@ export function AuthActions({ compact = false }: { compact?: boolean }) {
   async function handleSignOut() {
     setPending("sign_out");
     setAuthError("");
+    setIsMenuOpen(false);
 
     try {
       await supabase?.auth.signOut();
@@ -269,33 +270,39 @@ export function AuthActions({ compact = false }: { compact?: boolean }) {
 
   if (sessionLabel) {
     return (
-      <div className="relative" ref={menuRef}>
-        <button
+      <div className="relative inline-flex items-center gap-2" ref={menuRef}>
+        <div
+          aria-label="Signed in account"
           className={
             compact
               ? "inline-flex h-10 max-w-[12rem] items-center gap-2 rounded-lg border border-[#171717] bg-[#171717] px-3 text-sm font-semibold text-white"
               : "inline-flex h-12 max-w-full items-center justify-center gap-2 rounded-lg border border-[#171717] bg-[#171717] px-4 text-sm font-semibold text-white"
           }
-          disabled={pending !== null}
-          onClick={() => setIsMenuOpen((value) => !value)}
-          type="button"
         >
           <span className="min-w-0 truncate">{sessionLabel}</span>
-          <ChevronDown size={16} strokeWidth={2} />
+        </div>
+
+        <button
+          aria-label="Log out"
+          className={
+            compact
+              ? "inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#d8d0c2] bg-white text-[#171717] transition hover:border-[#171717] disabled:opacity-60"
+              : "inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-[#d8d0c2] bg-white px-3 text-sm font-semibold text-[#171717] transition hover:border-[#171717] disabled:opacity-60"
+          }
+          disabled={pending !== null}
+          onClick={handleSignOut}
+          type="button"
+        >
+          <LogOut size={17} strokeWidth={2} />
+          <span className={compact ? "sr-only" : ""}>
+            {pending === "sign_out" ? "Signing out..." : "Log out"}
+          </span>
         </button>
 
-        {isMenuOpen ? (
-          <div className="absolute right-0 z-20 mt-2 w-44 rounded-lg border border-[#d8d0c2] bg-white p-2 shadow-lg">
-            <button
-              className="inline-flex h-10 w-full items-center gap-2 rounded-lg px-3 text-sm font-semibold text-[#171717] hover:bg-[#f7f3ec]"
-              disabled={pending !== null}
-              onClick={handleSignOut}
-              type="button"
-            >
-              <LogOut size={17} strokeWidth={2} />
-              Sign out
-            </button>
-          </div>
+        {authError ? (
+          <p className="absolute right-0 top-full z-20 mt-2 w-64 rounded-lg border border-[#e4b4a8] bg-white p-2 text-sm font-medium text-[#a33d2a] shadow-lg">
+            {authError}
+          </p>
         ) : null}
       </div>
     );
