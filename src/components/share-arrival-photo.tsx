@@ -132,6 +132,14 @@ function absoluteUrl(value: string) {
   return `${getOrigin()}${value.startsWith("/") ? "" : "/"}${value}`;
 }
 
+function isMobileBrowser() {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
 export function ShareArrivalPhoto({
   city,
   country,
@@ -151,7 +159,7 @@ export function ShareArrivalPhoto({
   );
   const xCaption = useMemo(
     () =>
-      `I received a moment from ${city}, ${country} on SomeWhere. Send one photo, receive somewhere. $WHERE`,
+      `I received a moment from ${city}, ${country} on SomeWhere. Send one photo, receive somewhere. $WHERE ${SITE_URL}`,
     [city, country],
   );
   const shareUrl = useMemo(
@@ -197,6 +205,25 @@ export function ShareArrivalPhoto({
 
   async function openXShare() {
     setStatus(null);
+
+    if (isMobileBrowser() && navigator.share) {
+      try {
+        await navigator.share({
+          text: xCaption,
+          title: `${city}, ${country} on SomeWhere`,
+          url: shareUrl,
+        });
+        await recordShareEvent("x");
+        setStatus("Share sheet opened. Choose X if it is installed.");
+        return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          setStatus("Share canceled.");
+          return;
+        }
+      }
+    }
+
     window.open(xShareUrl, "_blank", "noopener,noreferrer");
     await recordShareEvent("x");
     setStatus("X compose opened with the photo card link.");

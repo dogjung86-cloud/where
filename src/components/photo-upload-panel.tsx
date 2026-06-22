@@ -1,8 +1,8 @@
 "use client";
 
-import type { ChangeEvent, DragEvent } from "react";
+import type { ChangeEvent, DragEvent, MouseEvent } from "react";
 import { Camera, ImagePlus, Lock, UploadCloud, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
@@ -11,6 +11,7 @@ const SUPPORTED_IMAGE_TYPES = new Set([
   "image/png",
   "image/webp",
   "image/heic",
+  "image/heif",
 ]);
 
 type MessageTone = "auth" | "error" | "info" | "success";
@@ -59,6 +60,32 @@ function getErrorMessage(error: unknown) {
   return "Something went wrong while sending the photo.";
 }
 
+function getUploadContentType(file: File) {
+  if (SUPPORTED_IMAGE_TYPES.has(file.type)) {
+    return file.type === "image/heif" ? "image/heic" : file.type;
+  }
+
+  const extension = file.name.split(".").pop()?.toLowerCase();
+
+  if (extension === "jpg" || extension === "jpeg") {
+    return "image/jpeg";
+  }
+
+  if (extension === "png") {
+    return "image/png";
+  }
+
+  if (extension === "webp") {
+    return "image/webp";
+  }
+
+  if (extension === "heic" || extension === "heif") {
+    return "image/heic";
+  }
+
+  return null;
+}
+
 async function readJsonResponse<T>(response: Response): Promise<T> {
   const data = (await response.json().catch(() => ({}))) as {
     error?: string;
@@ -73,8 +100,8 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
 
 export function PhotoUploadPanel() {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const libraryInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputId = useId();
+  const libraryInputId = useId();
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -152,12 +179,7 @@ export function PhotoUploadPanel() {
       return;
     }
 
-    if (!file.type.startsWith("image/")) {
-      setPanelMessage("Please choose an image file.", "error");
-      return;
-    }
-
-    if (!SUPPORTED_IMAGE_TYPES.has(file.type)) {
+    if (!getUploadContentType(file)) {
       setPanelMessage("Please choose a JPEG, PNG, WebP, or HEIC image.", "error");
       return;
     }
@@ -168,20 +190,11 @@ export function PhotoUploadPanel() {
     setPanelMessage("Photo ready. Press Send photo to exchange it.", "info");
   }
 
-  function openLibraryPicker() {
+  function handlePickerClick(event: MouseEvent<HTMLInputElement>) {
     if (!requireSignIn()) {
+      event.preventDefault();
       return;
     }
-
-    libraryInputRef.current?.click();
-  }
-
-  function openCameraPicker() {
-    if (!requireSignIn()) {
-      return;
-    }
-
-    cameraInputRef.current?.click();
   }
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -237,6 +250,11 @@ export function PhotoUploadPanel() {
       const authHeaders = {
         Authorization: `Bearer ${token}`,
       };
+      const contentType = getUploadContentType(selectedFile);
+
+      if (!contentType) {
+        throw new Error("Please choose a JPEG, PNG, WebP, or HEIC image.");
+      }
 
       const signedUploadResponse = await fetch("/api/uploads/signed-url", {
         method: "POST",
@@ -245,7 +263,7 @@ export function PhotoUploadPanel() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          contentType: selectedFile.type,
+          contentType,
           byteSize: selectedFile.size,
         }),
       });
@@ -260,7 +278,7 @@ export function PhotoUploadPanel() {
           signedUpload.token,
           selectedFile,
           {
-            contentType: selectedFile.type,
+            contentType,
           },
         );
 
@@ -406,41 +424,40 @@ export function PhotoUploadPanel() {
               take a new photo now.
             </span>
             <div className="grid w-full max-w-sm grid-cols-1 gap-2 sm:grid-cols-2">
-              <button
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[#d8d0c2] bg-white px-3 text-sm font-semibold text-[#171717] transition hover:border-[#171717]"
-                onClick={openLibraryPicker}
-                type="button"
+              <label
+                className="relative inline-flex h-11 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg border border-[#d8d0c2] bg-white px-3 text-sm font-semibold text-[#171717] transition hover:border-[#171717]"
+                htmlFor={libraryInputId}
               >
+                <input
+                  id={libraryInputId}
+                  className="absolute inset-0 z-10 size-full cursor-pointer opacity-0"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                  onClick={handlePickerClick}
+                  onChange={handleFileChange}
+                />
                 <ImagePlus size={17} strokeWidth={2} />
                 Choose photo
-              </button>
-              <button
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[#171717] bg-[#171717] px-3 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={openCameraPicker}
-                type="button"
+              </label>
+              <label
+                className="relative inline-flex h-11 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg border border-[#171717] bg-[#171717] px-3 text-sm font-semibold text-white transition"
+                htmlFor={cameraInputId}
               >
+                <input
+                  id={cameraInputId}
+                  className="absolute inset-0 z-10 size-full cursor-pointer opacity-0"
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onClick={handlePickerClick}
+                  onChange={handleFileChange}
+                />
                 <Camera size={17} strokeWidth={2} />
                 Take photo
-              </button>
+              </label>
             </div>
           </div>
         )}
-
-        <input
-          ref={libraryInputRef}
-          className="sr-only"
-          type="file"
-          accept="image/jpeg,image/png,image/webp,image/heic"
-          onChange={handleFileChange}
-        />
-        <input
-          ref={cameraInputRef}
-          className="sr-only"
-          type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={handleFileChange}
-        />
       </div>
 
       {message ? (

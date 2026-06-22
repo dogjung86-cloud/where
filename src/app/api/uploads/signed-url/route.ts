@@ -14,7 +14,13 @@ export const runtime = "nodejs";
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 
 const signedUploadSchema = z.object({
-  contentType: z.enum(["image/jpeg", "image/png", "image/webp", "image/heic"]),
+  contentType: z.enum([
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/heic",
+    "image/heif",
+  ]),
   byteSize: z.number().int().positive().max(MAX_UPLOAD_BYTES),
   cityName: z.string().trim().min(1).max(120).optional(),
   regionName: z.string().trim().min(1).max(120).optional(),
@@ -37,7 +43,7 @@ function extensionForContentType(contentType: string) {
     return "webp";
   }
 
-  if (contentType === "image/heic") {
+  if (contentType === "image/heic" || contentType === "image/heif") {
     return "heic";
   }
 
