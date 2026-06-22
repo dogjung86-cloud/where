@@ -82,5 +82,5 @@ Authorization: Bearer <supabase_user_jwt>
 - Allow receivers to report sexual, abusive, graphic, spam, or other unsafe photos.
 - Store hashed IP identifiers for moderation enforcement; do not expose raw IPs to users.
 - Serve private images by signed URL only.
-- Send `$WHERE` utility spend to the treasury wallet until burn routing is enabled.
+- Keep `$WHERE` product copy focused on the planned 50% burn and 50% treasury split; route utility spend to the treasury wallet until burn routing is enabled.
 - Use Google OAuth and Phantom wallet Web3 signatures as the MVP sign-in surfaces.
