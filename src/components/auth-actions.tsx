@@ -23,8 +23,10 @@ type PhantomProvider = {
     toString: () => string;
   } | null;
   connect?: () => Promise<{ publicKey: { toString: () => string } }>;
-  signIn?: SolanaWallet["signIn"];
-  signMessage?: SolanaWallet["signMessage"];
+  signMessage?: (
+    message: Uint8Array,
+    encoding?: "utf8" | string,
+  ) => Promise<Uint8Array | { signature: Uint8Array }> | Uint8Array | { signature: Uint8Array };
 };
 
 declare global {
@@ -63,13 +65,37 @@ function getProviderWalletAddress(
 }
 
 function createSupabaseWallet(provider: PhantomProvider, walletAddress: string) {
+  const signMessage = provider.signMessage?.bind(provider);
+
   return {
     publicKey: {
       toBase58: () => walletAddress,
     },
-    signIn: provider.signIn?.bind(provider),
-    signMessage: provider.signMessage?.bind(provider),
-  };
+    signMessage: async (message, encoding) => {
+      if (!signMessage) {
+        throw new Error("Phantom message signing is unavailable.");
+      }
+
+      const signature = await signMessage(message, encoding);
+
+      if (signature instanceof Uint8Array) {
+        return signature;
+      }
+
+      if (signature.signature instanceof Uint8Array) {
+        return signature.signature;
+      }
+
+      throw new Error("Phantom returned an invalid signature.");
+    },
+  } satisfies SolanaWallet;
+}
+
+function createAuthNonce() {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function getSessionLabel(session: Session | null) {
@@ -190,15 +216,19 @@ export function AuthActions({ compact = false }: { compact?: boolean }) {
         throw new Error("Phantom wallet address was not available.");
       }
 
+      if (!provider.signMessage) {
+        throw new Error("Please update Phantom to sign in with this wallet.");
+      }
+
       const { data, error } = await supabase.auth.signInWithWeb3({
         chain: "solana",
         wallet: createSupabaseWallet(provider, walletAddress),
         statement: "Sign in to SomeWhere to exchange private photos.",
         options: {
-          url: window.location.href,
+          url: window.location.origin,
           signInWithSolana: {
             expirationTime: new Date(Date.now() + 5 * 60_000).toISOString(),
-            nonce: crypto.randomUUID(),
+            nonce: createAuthNonce(),
           },
         },
       });
