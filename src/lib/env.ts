@@ -3,6 +3,10 @@ const DEFAULT_WHERE_TREASURY_WALLET =
 const DEFAULT_SOLANA_RPC_URL =
   "https://mainnet.helius-rpc.com/?api-key=b5e995b9-0436-4ae6-b4d8-8f7fc4798f13";
 
+function cleanEnvValue(value: string) {
+  return value.replace(/^\uFEFF/, "").trim();
+}
+
 export function getRequiredEnv(name: string) {
   const value = process.env[name];
 
@@ -10,11 +14,13 @@ export function getRequiredEnv(name: string) {
     throw new Error(`Missing required environment variable: ${name}`);
   }
 
-  return value;
+  return cleanEnvValue(value);
 }
 
 export function getOptionalEnv(name: string, fallback = "") {
-  return process.env[name] || fallback;
+  const value = process.env[name];
+
+  return value ? cleanEnvValue(value) : fallback;
 }
 
 export function getSupabaseConfig() {
