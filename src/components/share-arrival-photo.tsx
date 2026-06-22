@@ -3,6 +3,9 @@
 import { Camera, Copy, Download, Share2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
+const SITE_URL = "https://playwhere.xyz/";
+const INSTAGRAM_CREATE_URL = "https://www.instagram.com/create/select/";
+
 type ShareArrivalPhotoProps = {
   city: string;
   country: string;
@@ -19,7 +22,63 @@ function filenameForArrival(city: string, country: string) {
     .replace(/(^-|-$)/g, "");
 }
 
-async function imageFileFromUrl(image: string, filename: string) {
+async function convertBlobToJpegFile(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const element = new Image();
+
+      element.addEventListener("load", () => resolve(element), { once: true });
+      element.addEventListener(
+        "error",
+        () => reject(new Error("Could not prepare the image.")),
+        { once: true },
+      );
+      element.src = url;
+    });
+    const canvas = document.createElement("canvas");
+    const width = image.naturalWidth || image.width;
+    const height = image.naturalHeight || image.height;
+
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      throw new Error("Could not prepare the image.");
+    }
+
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, width, height);
+    context.drawImage(image, 0, 0, width, height);
+
+    const jpegBlob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (nextBlob) => {
+          if (nextBlob) {
+            resolve(nextBlob);
+          } else {
+            reject(new Error("Could not prepare the image."));
+          }
+        },
+        "image/jpeg",
+        0.92,
+      );
+    });
+
+    return new File([jpegBlob], `${filename}.jpg`, { type: "image/jpeg" });
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function imageFileFromUrl(
+  image: string,
+  filename: string,
+  format: "jpeg" | "original" = "original",
+) {
   const response = await fetch(image);
 
   if (!response.ok) {
@@ -27,6 +86,15 @@ async function imageFileFromUrl(image: string, filename: string) {
   }
 
   const blob = await response.blob();
+
+  if (format === "jpeg") {
+    try {
+      return await convertBlobToJpegFile(blob, filename);
+    } catch {
+      return new File([blob], `${filename}.webp`, { type: blob.type });
+    }
+  }
+
   const extension = blob.type.includes("webp")
     ? "webp"
     : blob.type.includes("png")
@@ -74,7 +142,7 @@ export function ShareArrivalPhoto({
   const [status, setStatus] = useState<string | null>(null);
   const caption = useMemo(
     () =>
-      `I received a moment from ${city}, ${country} on SomeWhere. Send one photo, receive somewhere. $WHERE`,
+      `I received a moment from ${city}, ${country} on SomeWhere. Send one photo, receive somewhere. $WHERE ${SITE_URL}`,
     [city, country],
   );
   const shareUrl = useMemo(
@@ -91,14 +159,14 @@ export function ShareArrivalPhoto({
     return `https://x.com/intent/post?${params.toString()}`;
   }, [caption, shareUrl]);
 
-  async function copyShareLink() {
-    await navigator.clipboard.writeText(shareUrl);
+  async function copyShareText() {
+    await navigator.clipboard.writeText(caption);
     await recordShareEvent("copy_link");
-    setStatus("Share link copied.");
+    setStatus("Share text copied.");
   }
 
   async function recordShareEvent(
-    target: "copy_link" | "instagram" | "native" | "save" | "x",
+    target: "copy_link" | "instagram" | "save" | "x",
   ) {
     await fetch("/api/share/events", {
       body: JSON.stringify({
@@ -114,55 +182,38 @@ export function ShareArrivalPhoto({
     }).catch(() => null);
   }
 
-  async function sharePhotoWithFallback(target: "Instagram" | "X") {
+  async function openXShare() {
     setStatus(null);
+    window.open(xShareUrl, "_blank", "noopener,noreferrer");
+    await recordShareEvent("x");
+    setStatus("X compose opened with the share text and arrival link.");
+  }
+
+  async function openInstagramShare() {
+    setStatus(null);
+    const copyText = navigator.clipboard.writeText(caption).catch(() => null);
+
+    window.open(INSTAGRAM_CREATE_URL, "_blank", "noopener,noreferrer");
 
     try {
       const file = await imageFileFromUrl(
         image,
         filenameForArrival(city, country),
+        "jpeg",
       );
-      const sharePayload = {
-        files: [file],
-        text: caption,
-        title: "SomeWhere arrival",
-        url: shareUrl,
-      };
-
-      if (navigator.canShare?.(sharePayload)) {
-        await navigator.share(sharePayload);
-        await recordShareEvent("native");
-        setStatus(`Shared with photo. Choose ${target} from the share sheet.`);
-        return;
-      }
-
       downloadFile(file);
-      window.open(
-        target === "X"
-          ? xShareUrl
-          : "https://www.instagram.com/create/select/",
-        "_blank",
-        "noopener,noreferrer",
-      );
-      await recordShareEvent(target === "X" ? "x" : "instagram");
+      await copyText;
+      await recordShareEvent("instagram");
       setStatus(
-        target === "X"
-          ? "X compose opened. The photo file was downloaded so you can attach it to the post."
-          : "Instagram create opened. The photo file was downloaded so you can attach it to the post.",
+        "Instagram create opened. A JPG copy was downloaded and the share text was copied.",
       );
     } catch (error) {
-      await copyShareLink();
-      window.open(
-        target === "X"
-          ? xShareUrl
-          : "https://www.instagram.com/create/select/",
-        "_blank",
-        "noopener,noreferrer",
-      );
+      await copyText;
+      await recordShareEvent("instagram");
       setStatus(
         error instanceof Error
-          ? `${error.message} Share link copied instead.`
-          : "Share link copied instead.",
+          ? `${error.message} Instagram opened and the share text was copied.`
+          : "Instagram opened and the share text was copied.",
       );
     }
   }
@@ -248,14 +299,14 @@ export function ShareArrivalPhoto({
             <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
               <button
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#171717] px-3 text-sm font-semibold text-white"
-                onClick={() => sharePhotoWithFallback("X")}
+                onClick={openXShare}
                 type="button"
               >
                 X
               </button>
               <button
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#d8d0c2] bg-white px-3 text-sm font-semibold"
-                onClick={() => sharePhotoWithFallback("Instagram")}
+                onClick={openInstagramShare}
                 type="button"
               >
                 <Camera size={16} strokeWidth={2} />
@@ -263,11 +314,11 @@ export function ShareArrivalPhoto({
               </button>
               <button
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#d8d0c2] bg-white px-3 text-sm font-semibold"
-                onClick={copyShareLink}
+                onClick={copyShareText}
                 type="button"
               >
                 <Copy size={16} strokeWidth={2} />
-                Copy link
+                Copy text
               </button>
               <a
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#d8d0c2] bg-white px-3 text-sm font-semibold"

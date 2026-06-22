@@ -42,7 +42,7 @@ export default async function StatsPage() {
     ["X", stats.shareBreakdown.x ?? 0],
     ["Instagram", stats.shareBreakdown.instagram ?? 0],
     ["Native", stats.shareBreakdown.native ?? 0],
-    ["Copy link", stats.shareBreakdown.copy_link ?? 0],
+    ["Copy text", stats.shareBreakdown.copy_link ?? 0],
     ["Save", stats.shareBreakdown.save ?? 0],
   ];
 
