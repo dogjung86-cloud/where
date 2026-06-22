@@ -1,6 +1,6 @@
 "use client";
 
-import { MapPin, Shuffle } from "lucide-react";
+import { MapPin, Shuffle, X } from "lucide-react";
 import { Transaction } from "@solana/web3.js";
 import { useState } from "react";
 
@@ -94,12 +94,18 @@ export function WhereUtilityButton({
   utilityKey,
 }: WhereUtilityButtonProps) {
   const [isBusy, setIsBusy] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
   const copy = UTILITY_COPY[utilityKey];
   const Icon = utilityKey === "city_reroll" ? Shuffle : MapPin;
+  const actionNote =
+    utilityKey === "city_reroll"
+      ? "This will spend 1,000 $WHERE to replace this arrival with a different random city."
+      : "This will spend 3,000 $WHERE to request an arrival from a city not in your passport yet.";
 
-  async function handleClick() {
+  async function startPayment() {
+    setIsConfirming(false);
     setIsBusy(true);
-    onStatus?.(`Opening Phantom for ${copy.cost}...`);
+    onStatus?.(`Preparing ${copy.label}...`);
 
     try {
       const supabase = createBrowserSupabaseClient();
@@ -124,6 +130,8 @@ export function WhereUtilityButton({
       if (!provider?.isPhantom || !provider.signAndSendTransaction) {
         throw new Error("Please install or unlock Phantom wallet.");
       }
+
+      onStatus?.(`Opening Phantom for ${copy.cost}...`);
 
       const wallet = provider.publicKey
         ? { publicKey: provider.publicKey }
@@ -207,31 +215,94 @@ export function WhereUtilityButton({
     }
   }
 
+  function handleClick() {
+    if (!isBusy) {
+      setIsConfirming(true);
+    }
+  }
+
+  const confirmationDialog = isConfirming ? (
+    <div
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#171717]/70 p-4"
+      onClick={() => setIsConfirming(false)}
+      role="dialog"
+    >
+      <div
+        className="w-full max-w-sm rounded-lg border border-[#d8d0c2] bg-[#f7f3ec] p-4 shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-[#776e62]">$WHERE action</p>
+            <h2 className="text-xl font-semibold">{copy.label}</h2>
+          </div>
+          <button
+            aria-label="Close payment notice"
+            className="grid size-9 shrink-0 place-items-center rounded-lg border border-[#d8d0c2] bg-white text-[#171717]"
+            onClick={() => setIsConfirming(false)}
+            type="button"
+          >
+            <X size={17} strokeWidth={2} />
+          </button>
+        </div>
+
+        <p className="rounded-lg bg-white px-3 py-2 text-sm leading-6 text-[#5f574f]">
+          {actionNote} After you press OK, Phantom will open so you can approve
+          the payment. Token use is split 50% burn and 50% treasury.
+        </p>
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            className="h-10 rounded-lg border border-[#d8d0c2] bg-white px-4 text-sm font-semibold"
+            onClick={() => setIsConfirming(false)}
+            type="button"
+          >
+            Cancel
+          </button>
+          <button
+            className="h-10 rounded-lg bg-[#171717] px-4 text-sm font-semibold text-white"
+            onClick={() => startPayment()}
+            type="button"
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   if (compact) {
     return (
-      <button
-        aria-label={`${copy.ariaLabel} (${copy.cost})`}
-        className="grid size-8 place-items-center rounded-lg border border-[#d8d0c2] bg-white text-[#5f574f] transition hover:border-[#0d6b4f] hover:text-[#0d6b4f] disabled:cursor-not-allowed disabled:opacity-60"
-        disabled={isBusy}
-        onClick={handleClick}
-        title={`${copy.label} - ${copy.cost}`}
-        type="button"
-      >
-        <Icon size={14} strokeWidth={2} />
-      </button>
+      <>
+        <button
+          aria-label={`${copy.ariaLabel} (${copy.cost})`}
+          className="grid size-8 place-items-center rounded-lg border border-[#d8d0c2] bg-white text-[#5f574f] transition hover:border-[#0d6b4f] hover:text-[#0d6b4f] disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={isBusy}
+          onClick={handleClick}
+          title={`${copy.label} - ${copy.cost}`}
+          type="button"
+        >
+          <Icon size={14} strokeWidth={2} />
+        </button>
+        {confirmationDialog}
+      </>
     );
   }
 
   return (
-    <button
-      className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-[#d8d0c2] bg-white px-3 text-sm font-semibold text-[#171717] transition hover:border-[#0d6b4f] hover:text-[#0d6b4f] disabled:cursor-not-allowed disabled:opacity-60"
-      disabled={isBusy}
-      onClick={handleClick}
-      title={`${copy.cost}`}
-      type="button"
-    >
-      <Icon size={16} strokeWidth={2} />
-      <span>{copy.label}</span>
-    </button>
+    <>
+      <button
+        className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-[#d8d0c2] bg-white px-3 text-sm font-semibold text-[#171717] transition hover:border-[#0d6b4f] hover:text-[#0d6b4f] disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={isBusy}
+        onClick={handleClick}
+        title={`${copy.cost}`}
+        type="button"
+      >
+        <Icon size={16} strokeWidth={2} />
+        <span>{copy.label}</span>
+      </button>
+      {confirmationDialog}
+    </>
   );
 }

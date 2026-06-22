@@ -398,6 +398,12 @@ export function ArrivedMomentsSection({
                       targetMatchId={moment.matchId}
                       utilityKey="city_reroll"
                     />
+                    <ShareArrivalPhoto
+                      city={moment.city}
+                      country={moment.country}
+                      image={moment.image}
+                      variant="icon"
+                    />
                     <ReportPhotoButton
                       city={moment.city}
                       country={moment.country}

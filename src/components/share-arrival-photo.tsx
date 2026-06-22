@@ -1,12 +1,13 @@
 "use client";
 
-import { Camera, Copy, Download, X } from "lucide-react";
+import { Camera, Copy, Download, Share2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
 type ShareArrivalPhotoProps = {
   city: string;
   country: string;
   image: string;
+  variant?: "image" | "icon";
 };
 
 function filenameForArrival(city: string, country: string) {
@@ -49,6 +50,7 @@ export function ShareArrivalPhoto({
   city,
   country,
   image,
+  variant = "image",
 }: ShareArrivalPhotoProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -117,23 +119,37 @@ export function ShareArrivalPhoto({
     }
   }
 
+  const openShare = () => {
+    setStatus(null);
+    setIsOpen(true);
+  };
+
   return (
     <>
-      <button
-        aria-label={`Open share options for ${city}, ${country}`}
-        className="block w-full overflow-hidden text-left"
-        onClick={() => {
-          setStatus(null);
-          setIsOpen(true);
-        }}
-        type="button"
-      >
-        <span
-          aria-hidden="true"
-          className="block aspect-[4/5] bg-cover bg-center transition duration-200 hover:scale-[1.015]"
-          style={{ backgroundImage: `url(${image})` }}
-        />
-      </button>
+      {variant === "icon" ? (
+        <button
+          aria-label={`Share photo from ${city}, ${country}`}
+          className="grid size-8 place-items-center rounded-lg border border-[#d8d0c2] bg-white text-[#5f574f] transition hover:border-[#0d6b4f] hover:text-[#0d6b4f]"
+          onClick={openShare}
+          title="Share"
+          type="button"
+        >
+          <Share2 size={14} strokeWidth={2} />
+        </button>
+      ) : (
+        <button
+          aria-label={`Open share options for ${city}, ${country}`}
+          className="block w-full overflow-hidden text-left"
+          onClick={openShare}
+          type="button"
+        >
+          <span
+            aria-hidden="true"
+            className="block aspect-[4/5] bg-cover bg-center transition duration-200 hover:scale-[1.015]"
+            style={{ backgroundImage: `url(${image})` }}
+          />
+        </button>
+      )}
 
       {isOpen ? (
         <div
