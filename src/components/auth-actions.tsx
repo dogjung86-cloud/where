@@ -244,6 +244,7 @@ export function AuthActions({ compact = false }: { compact?: boolean }) {
             ? formatWalletAddress(synced.profile.walletAddress)
             : getSessionLabel(data.session),
         );
+        window.dispatchEvent(new Event("where:auth-profile-synced"));
       }
     } finally {
       setPending(null);

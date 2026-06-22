@@ -14,6 +14,7 @@ export function AdminNavLink() {
       return;
     }
 
+    const client = supabase;
     let isMounted = true;
 
     async function checkAdmin(accessToken: string | null | undefined) {
@@ -39,24 +40,36 @@ export function AdminNavLink() {
       }
     }
 
-    supabase.auth.getSession().then(({ data }) => {
-      checkAdmin(data.session?.access_token).catch(() => {
-        if (isMounted) {
-          setIsAdmin(false);
-        }
+    function refreshAdminStatus() {
+      client.auth.getSession().then(({ data }) => {
+        checkAdmin(data.session?.access_token).catch(() => {
+          if (isMounted) {
+            setIsAdmin(false);
+          }
+        });
       });
-    });
+    }
 
-    const { data: listener } = supabase.auth.onAuthStateChange(
+    refreshAdminStatus();
+
+    window.addEventListener("where:auth-profile-synced", refreshAdminStatus);
+
+    const { data: listener } = client.auth.onAuthStateChange(
       (_event, session) => {
         checkAdmin(session?.access_token).catch(() => {
-          setIsAdmin(false);
+          if (isMounted) {
+            setIsAdmin(false);
+          }
         });
       },
     );
 
     return () => {
       isMounted = false;
+      window.removeEventListener(
+        "where:auth-profile-synced",
+        refreshAdminStatus,
+      );
       listener.subscription.unsubscribe();
     };
   }, [supabase]);

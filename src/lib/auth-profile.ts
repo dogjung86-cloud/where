@@ -8,8 +8,12 @@ const WALLET_METADATA_KEYS = [
   "address",
   "public_key",
   "publicKey",
+  "provider_id",
+  "providerId",
   "sub",
 ];
+
+const WEB3_PROVIDER_TOKENS = ["web3", "solana"];
 
 export function isSolanaWalletAddress(value: string) {
   return SOLANA_WALLET_PATTERN.test(value.trim());
@@ -38,7 +42,23 @@ function readString(record: Record<string, unknown>, key: string) {
   return trimmed || null;
 }
 
-function findWalletAddress(record: Record<string, unknown> | null) {
+function hasWeb3ProviderValue(value: unknown): boolean {
+  if (typeof value === "string") {
+    const normalized = value.toLowerCase();
+    return WEB3_PROVIDER_TOKENS.some((token) => normalized.includes(token));
+  }
+
+  if (Array.isArray(value)) {
+    return value.some((entry) => hasWeb3ProviderValue(entry));
+  }
+
+  return false;
+}
+
+function findWalletAddress(
+  record: Record<string, unknown> | null,
+  depth = 0,
+): string | null {
   if (!record) {
     return null;
   }
@@ -51,6 +71,36 @@ function findWalletAddress(record: Record<string, unknown> | null) {
     }
   }
 
+  if (depth > 3) {
+    return null;
+  }
+
+  for (const value of Object.values(record)) {
+    if (typeof value === "string" && isSolanaWalletAddress(value)) {
+      return value.trim();
+    }
+
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        if (typeof entry === "string" && isSolanaWalletAddress(entry)) {
+          return entry.trim();
+        }
+
+        const nestedEntry = findWalletAddress(asRecord(entry), depth + 1);
+
+        if (nestedEntry) {
+          return nestedEntry;
+        }
+      }
+    }
+
+    const nestedValue = findWalletAddress(asRecord(value), depth + 1);
+
+    if (nestedValue) {
+      return nestedValue;
+    }
+  }
+
   return null;
 }
 
@@ -59,44 +109,46 @@ function isSolanaWeb3Record(record: Record<string, unknown> | null) {
     return false;
   }
 
-  const provider = readString(record, "provider")?.toLowerCase();
-  const chain = readString(record, "chain")?.toLowerCase();
-
-  return provider === "web3" || chain === "solana";
+  return (
+    hasWeb3ProviderValue(record.provider) ||
+    hasWeb3ProviderValue(record.provider_id) ||
+    hasWeb3ProviderValue(record.providerId) ||
+    hasWeb3ProviderValue(record.chain) ||
+    hasWeb3ProviderValue(record.providers)
+  );
 }
 
 export function getVerifiedSolanaWalletAddress(user: User) {
   for (const identity of user.identities ?? []) {
-    const provider = identity.provider?.toLowerCase();
+    const identityRecord = asRecord(identity);
     const identityData = asRecord(identity.identity_data);
+    const walletAddress =
+      findWalletAddress(identityData) ?? findWalletAddress(identityRecord);
 
-    if (provider === "web3" || isSolanaWeb3Record(identityData)) {
-      const walletAddress = findWalletAddress(identityData);
-
-      if (walletAddress) {
-        return walletAddress;
-      }
-    }
-  }
-
-  const userMetadata = asRecord(user.user_metadata);
-
-  if (isSolanaWeb3Record(userMetadata)) {
-    const walletAddress = findWalletAddress(userMetadata);
-
-    if (walletAddress) {
+    if (
+      walletAddress &&
+      (hasWeb3ProviderValue(identity.provider) ||
+        isSolanaWeb3Record(identityData) ||
+        isSolanaWeb3Record(identityRecord))
+    ) {
       return walletAddress;
     }
   }
 
+  const userMetadata = asRecord(user.user_metadata);
+  const userWalletAddress = findWalletAddress(userMetadata);
+
+  if (userWalletAddress && isSolanaWeb3Record(userMetadata)) {
+    return userWalletAddress;
+  }
+
   const appMetadata = asRecord(user.app_metadata);
-  const providers = appMetadata?.providers;
+  const appWalletAddress = findWalletAddress(appMetadata);
   const hasWeb3Provider =
-    readString(appMetadata ?? {}, "provider") === "web3" ||
-    (Array.isArray(providers) && providers.includes("web3"));
+    isSolanaWeb3Record(appMetadata) || isSolanaWeb3Record(userMetadata);
 
   if (hasWeb3Provider) {
-    return findWalletAddress(userMetadata) ?? findWalletAddress(appMetadata);
+    return userWalletAddress ?? appWalletAddress;
   }
 
   return null;
