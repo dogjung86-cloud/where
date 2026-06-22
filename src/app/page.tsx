@@ -633,15 +633,11 @@ export default function Home() {
             <section className="rounded-lg bg-white p-5 text-[#171717]">
               <div className="mb-4 flex items-center gap-3">
                 <Stamp size={21} strokeWidth={1.8} />
-                <h3 className="text-lg font-semibold">Token spend split</h3>
+                <h3 className="text-lg font-semibold">Token spend route</h3>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-center">
+              <div className="grid grid-cols-1 gap-2 text-center">
                 <div className="rounded-lg bg-[#f7f3ec] p-3">
-                  <p className="text-xl font-semibold">50%</p>
-                  <p className="text-xs text-[#776e62]">burn</p>
-                </div>
-                <div className="rounded-lg bg-[#f7f3ec] p-3">
-                  <p className="text-xl font-semibold">50%</p>
+                  <p className="text-xl font-semibold">100%</p>
                   <p className="text-xs text-[#776e62]">treasury</p>
                 </div>
               </div>

@@ -44,7 +44,7 @@ SUPABASE_SERVICE_ROLE_KEY=
 SUPABASE_PHOTO_BUCKET=photos
 IP_HASH_SECRET=
 SOLANA_RPC_URL=https://mainnet.helius-rpc.com/?api-key=b5e995b9-0436-4ae6-b4d8-8f7fc4798f13
-WHERE_TOKEN_MINT=
+WHERE_TOKEN_MINT=FpVCcppMaLTMzcJPyhNGyKunch96vppavm6Lou3Epump
 WHERE_BURN_WALLET=
 WHERE_TREASURY_WALLET=9DpeHu3QSr3tkr4Mr6sLiriXKnUpDhgzh7tBg3FcZxBr
 ```
@@ -82,5 +82,5 @@ Authorization: Bearer <supabase_user_jwt>
 - Allow receivers to report sexual, abusive, graphic, spam, or other unsafe photos.
 - Store hashed IP identifiers for moderation enforcement; do not expose raw IPs to users.
 - Serve private images by signed URL only.
-- Start `$WHERE` spend split at 50% burn and 50% treasury.
+- Send `$WHERE` utility spend to the treasury wallet until burn routing is enabled.
 - Use Google OAuth and Phantom wallet Web3 signatures as the MVP sign-in surfaces.

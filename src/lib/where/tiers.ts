@@ -54,8 +54,8 @@ export const WHERE_UTILITY_PRICES: WhereUtility[] = [
 ];
 
 export const WHERE_SPEND_SPLIT = {
-  burnBps: 5_000,
-  treasuryBps: 5_000,
+  burnBps: 0,
+  treasuryBps: 10_000,
   rewardsBps: 0,
 } as const;
 

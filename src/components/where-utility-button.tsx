@@ -257,7 +257,7 @@ export function WhereUtilityButton({
 
         <p className="rounded-lg bg-white px-3 py-2 text-sm leading-6 text-[#5f574f]">
           {actionNote} After you press OK, Phantom will open so you can approve
-          the payment. Token use is split 50% burn and 50% treasury.
+          the payment. Token use is sent to the treasury wallet for now.
         </p>
 
         <div className="mt-4 flex justify-end gap-2">

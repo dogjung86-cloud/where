@@ -169,14 +169,19 @@ export async function buildWhereSpendTransaction({
     );
   }
 
+  if (split.burnAmount > 0) {
+    transaction.add(
+      createBurnCheckedInstruction(
+        sourceTokenAccount,
+        mint,
+        sender,
+        tokenUnits(split.burnAmount, mintInfo.decimals),
+        mintInfo.decimals,
+      ),
+    );
+  }
+
   transaction.add(
-    createBurnCheckedInstruction(
-      sourceTokenAccount,
-      mint,
-      sender,
-      tokenUnits(split.burnAmount, mintInfo.decimals),
-      mintInfo.decimals,
-    ),
     createTransferCheckedInstruction(
       sourceTokenAccount,
       mint,
@@ -272,12 +277,15 @@ export async function verifyWhereSpendTransaction({
       "parsed" in instruction &&
       instruction.parsed === expectedMemo,
   );
-  const hasBurn = hasTokenInstruction(
-    instructions,
-    "burnChecked",
-    tokenUnits(split.burnAmount, mintInfo.decimals),
-    (info) => info.mint === mint.toBase58() && info.owner === sender.toBase58(),
-  );
+  const hasBurn =
+    split.burnAmount === 0 ||
+    hasTokenInstruction(
+      instructions,
+      "burnChecked",
+      tokenUnits(split.burnAmount, mintInfo.decimals),
+      (info) =>
+        info.mint === mint.toBase58() && info.owner === sender.toBase58(),
+    );
   const hasTreasuryTransfer = hasTokenInstruction(
     instructions,
     "transferChecked",
